@@ -1,0 +1,160 @@
+.registration-container {
+  min-height: 100vh;
+  padding: 40px 20px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.registration-header {
+  text-align: center;
+  margin-bottom: 60px;
+}
+
+.plans-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 24px;
+  margin-bottom: 40px;
+}
+
+.plan-card {
+  background: rgba(255, 255, 255, 0.03);
+  border: 2px solid rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+  padding: 32px 24px;
+  cursor: pointer;
+  transition: all 0.3s;
+  position: relative;
+  overflow: hidden;
+}
+
+.plan-card:hover {
+  transform: translateY(-4px);
+  border-color: rgba(37, 211, 102, 0.3);
+  box-shadow: 0 10px 40px rgba(37, 211, 102, 0.2);
+}
+
+.plan-card.plan-selected {
+  border-color: #25D366;
+  background: rgba(37, 211, 102, 0.05);
+  box-shadow: 0 10px 40px rgba(37, 211, 102, 0.3);
+}
+
+.plan-badge {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  background: linear-gradient(135deg, #25D366 0%, #128C7E 100%);
+  color: white;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.plan-header {
+  margin-bottom: 24px;
+}
+
+.plan-name {
+  font-size: 20px;
+  font-weight: 700;
+  margin-bottom: 8px;
+  color: #fff;
+}
+
+.plan-price {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.price-currency {
+  font-size: 24px;
+  color: #94a3b8;
+  font-weight: 600;
+}
+
+.price-amount {
+  font-size: 48px;
+  font-weight: 700;
+  color: #25D366;
+  line-height: 1;
+}
+
+.price-period {
+  font-size: 14px;
+  color: #64748b;
+}
+
+.plan-features {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 20px 0;
+}
+
+.plan-features li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
+  color: #94a3b8;
+  font-size: 14px;
+}
+
+.plan-features li svg {
+  color: #25D366;
+  flex-shrink: 0;
+}
+
+.plan-selected-indicator {
+  text-align: center;
+  padding: 12px;
+  background: rgba(37, 211, 102, 0.2);
+  border-radius: 10px;
+  color: #25D366;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.registration-cta {
+  text-align: center;
+  max-width: 500px;
+  margin: 0 auto;
+  padding: 40px 20px;
+}
+
+.cta-text {
+  font-size: 18px;
+  color: #94a3b8;
+  margin-bottom: 24px;
+}
+
+.cta-text strong {
+  color: #25D366;
+}
+
+.google-btn-large {
+  width: 100%;
+  max-width: 400px;
+  padding: 18px 32px;
+  font-size: 17px;
+}
+
+.cta-note {
+  margin-top: 16px;
+  font-size: 13px;
+  color: #64748b;
+}
+
+@media (max-width: 768px) {
+  .plans-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .price-amount {
+    font-size: 36px;
+  }
+}

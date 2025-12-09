@@ -1,0 +1,57 @@
+/* Plan Limits Banner */
+.limits-banner {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 24px;
+  margin-bottom: 24px;
+  border-radius: 12px;
+  border: 1px solid;
+}
+
+.limits-warning {
+  background: rgba(251, 191, 36, 0.1);
+  border-color: rgba(251, 191, 36, 0.3);
+}
+
+.limits-critical {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: rgba(239, 68, 68, 0.3);
+}
+
+.limits-icon {
+  font-size: 24px;
+}
+
+.limits-content {
+  flex: 1;
+}
+
+.limits-title {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 4px;
+  color: #fff;
+}
+
+.limits-text {
+  font-size: 13px;
+  color: #94a3b8;
+}
+
+.limits-upgrade-btn {
+  padding: 8px 16px;
+  background: linear-gradient(135deg, #25D366 0%, #128C7E 100%);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.limits-upgrade-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(37, 211, 102, 0.3);
+}

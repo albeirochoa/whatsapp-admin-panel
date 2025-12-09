@@ -1,0 +1,26 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Usuarios solo pueden acceder a sus propios datos
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+      
+      // Proyectos del usuario
+      match /projects/{projectId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+        
+        // Agentes del proyecto
+        match /agents/{agentId} {
+          allow read, write: if request.auth != null && request.auth.uid == userId;
+        }
+      }
+    }
+    
+    // Acceso público de solo lectura para que el widget pueda leer la config
+    // (Opcional: si quieres que el widget lea directamente de Firebase)
+    match /public/{projectId} {
+      allow read: if true;
+      allow write: if false;
+    }
+  }
+}

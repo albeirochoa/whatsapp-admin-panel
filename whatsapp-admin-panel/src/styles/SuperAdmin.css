@@ -1,0 +1,215 @@
+.super-admin-container {
+  padding: 32px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.admin-header {
+  margin-bottom: 32px;
+}
+
+.admin-title {
+  font-size: 28px;
+  font-weight: 700;
+  margin-bottom: 8px;
+  background: linear-gradient(135deg, #fff 0%, #94a3b8 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.admin-subtitle {
+  color: #64748b;
+  font-size: 15px;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 20px;
+  margin-bottom: 32px;
+}
+
+.stat-card {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  padding: 24px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.stat-icon {
+  font-size: 36px;
+  width: 64px;
+  height: 64px;
+  background: rgba(37, 211, 102, 0.1);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.stat-content {
+  flex: 1;
+}
+
+.stat-value {
+  font-size: 32px;
+  font-weight: 700;
+  color: #25D366;
+  margin-bottom: 4px;
+}
+
+.stat-label {
+  font-size: 13px;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.plan-stat {
+  display: flex;
+  justify-content: space-between;
+  font-size: 14px;
+  margin: 4px 0;
+}
+
+.plan-stat-name {
+  color: #94a3b8;
+  font-weight: 600;
+}
+
+.plan-stat-count {
+  color: #25D366;
+  font-weight: 700;
+}
+
+.admin-card {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  padding: 24px;
+}
+
+.users-table-container {
+  overflow-x: auto;
+  margin-top: 20px;
+}
+
+.users-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.users-table thead tr {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.users-table th {
+  text-align: left;
+  padding: 12px 16px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.users-table td {
+  padding: 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  color: #94a3b8;
+  font-size: 14px;
+}
+
+.users-table tbody tr:hover {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.user-cell {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.table-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 2px solid rgba(37, 211, 102, 0.3);
+}
+
+.role-select,
+.plan-select {
+  padding: 6px 12px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  color: #fff;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.role-select:hover,
+.plan-select:hover {
+  border-color: #25D366;
+}
+
+.role-select:focus,
+.plan-select:focus {
+  outline: none;
+  border-color: #25D366;
+  box-shadow: 0 0 0 3px rgba(37, 211, 102, 0.1);
+}
+
+.plan-select {
+  font-weight: 600;
+  color: #25D366;
+}
+
+.text-center {
+  text-align: center;
+}
+
+.btn-delete-small {
+  padding: 6px 14px;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  border-radius: 6px;
+  color: #f87171;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-delete-small:hover {
+  background: rgba(239, 68, 68, 0.2);
+}
+
+@media (max-width: 1024px) {
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .super-admin-container {
+    padding: 20px;
+  }
+
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .users-table {
+    font-size: 12px;
+  }
+
+  .users-table th,
+  .users-table td {
+    padding: 8px;
+  }
+}

@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Test Widget Optimizado - WhatsApp Admin Panel</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 40px 20px;
+    }
+
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    .card {
+      background: white;
+      border-radius: 12px;
+      padding: 32px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      margin-bottom: 24px;
+    }
+
+    h1 {
+      color: #1f2937;
+      font-size: 32px;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    h2 {
+      color: #374151;
+      font-size: 20px;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .subtitle {
+      color: #6b7280;
+      font-size: 16px;
+      margin-bottom: 24px;
+    }
+
+    .status {
+      padding: 16px;
+      border-radius: 8px;
+      margin-bottom: 16px;
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .status.success {
+      background: rgba(16, 185, 129, 0.1);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      color: #047857;
+    }
+
+    .status.error {
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      color: #991b1b;
+    }
+
+    .status.info {
+      background: rgba(59, 130, 246, 0.1);
+      border: 1px solid rgba(59, 130, 246, 0.3);
+      color: #1e40af;
+    }
+
+    .input-group {
+      margin-bottom: 16px;
+    }
+
+    label {
+      display: block;
+      color: #374151;
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
+    input {
+      width: 100%;
+      padding: 12px;
+      border: 2px solid #e5e7eb;
+      border-radius: 8px;
+      font-size: 14px;
+      transition: border-color 0.2s;
+    }
+
+    input:focus {
+      outline: none;
+      border-color: #667eea;
+    }
+
+    button {
+      background: #667eea;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    button:hover {
+      background: #5568d3;
+    }
+
+    button:disabled {
+      background: #9ca3af;
+      cursor: not-allowed;
+    }
+
+    .test-result {
+      margin-top: 24px;
+      padding: 16px;
+      background: #f9fafb;
+      border-radius: 8px;
+      border: 1px solid #e5e7eb;
+    }
+
+    .test-result h3 {
+      color: #1f2937;
+      font-size: 16px;
+      margin-bottom: 12px;
+    }
+
+    .test-result pre {
+      background: #1f2937;
+      color: #10b981;
+      padding: 16px;
+      border-radius: 6px;
+      overflow-x: auto;
+      font-size: 12px;
+      line-height: 1.6;
+    }
+
+    .metric {
+      display: flex;
+      justify-content: space-between;
+      padding: 12px;
+      background: white;
+      border-radius: 6px;
+      margin-bottom: 8px;
+    }
+
+    .metric-label {
+      color: #6b7280;
+      font-size: 14px;
+    }
+
+    .metric-value {
+      color: #1f2937;
+      font-weight: 600;
+      font-size: 14px;
+    }
+
+    .help-text {
+      color: #6b7280;
+      font-size: 13px;
+      margin-top: 6px;
+    }
+
+    .instructions {
+      background: rgba(59, 130, 246, 0.05);
+      border-left: 4px solid #3b82f6;
+      padding: 16px;
+      margin-bottom: 24px;
+      border-radius: 4px;
+    }
+
+    .instructions ol {
+      margin-left: 20px;
+      color: #4b5563;
+      font-size: 14px;
+      line-height: 1.8;
+    }
+
+    .network-info {
+      background: #f9fafb;
+      padding: 12px;
+      border-radius: 6px;
+      margin-top: 12px;
+      font-size: 13px;
+      color: #4b5563;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <div class="card">
+      <h1>
+        🧪 Test de Optimización del Widget
+      </h1>
+      <p class="subtitle">
+        Verifica que el widget esté usando Firebase Storage en lugar de Firestore
+      </p>
+
+      <div class="status info">
+        <strong>💡 Objetivo:</strong> El widget debe descargar de Storage ($0.12/GB) y NO leer de Firestore ($0.06/100K lecturas)
+      </div>
+    </div>
+
+    <!-- Configuration -->
+    <div class="card">
+      <h2>⚙️ Configuración del Test</h2>
+
+      <div class="instructions">
+        <strong>📋 Cómo obtener tus valores:</strong>
+        <ol>
+          <li>Abre Firebase Console → Authentication → Users</li>
+          <li>Copia tu <strong>User UID</strong></li>
+          <li>Abre tu panel de admin y copia el <strong>Project ID</strong> de la URL</li>
+          <li>Pega los valores abajo y haz clic en "Ejecutar Test"</li>
+        </ol>
+      </div>
+
+      <div class="input-group">
+        <label>User ID (Firebase Auth UID)</label>
+        <input
+          type="text"
+          id="userId"
+          placeholder="Ejemplo: xB3kLm9pQ2RdN8..."
+        >
+        <p class="help-text">Lo encuentras en Firebase Console → Authentication → Users</p>
+      </div>
+
+      <div class="input-group">
+        <label>Project ID</label>
+        <input
+          type="text"
+          id="projectId"
+          placeholder="Ejemplo: proj_abc123"
+        >
+        <p class="help-text">Lo ves en la URL del panel cuando seleccionas un proyecto</p>
+      </div>
+
+      <button onclick="runTest()" id="runButton">
+        🚀 Ejecutar Test
+      </button>
+    </div>
+
+    <!-- Results -->
+    <div class="card" id="resultsCard" style="display: none;">
+      <h2>📊 Resultados del Test</h2>
+
+      <div id="statusMessage"></div>
+
+      <div class="test-result">
+        <h3>Datos Recibidos:</h3>
+        <pre id="jsonOutput">Ejecuta el test para ver los resultados...</pre>
+      </div>
+
+      <div class="test-result">
+        <h3>Métricas de Red:</h3>
+        <div id="metricsOutput"></div>
+      </div>
+
+      <div class="network-info">
+        <strong>💡 Verificación:</strong> Abre DevTools (F12) → Network y busca la petición.
+        <br>✅ Debe ser a <code>firebasestorage.googleapis.com</code>
+        <br>❌ NO debe ser a <code>firestore.googleapis.com</code>
+      </div>
+    </div>
+
+    <!-- Cost Comparison -->
+    <div class="card">
+      <h2>💰 Comparación de Costos</h2>
+
+      <div class="metric">
+        <span class="metric-label">Método Anterior (Firestore):</span>
+        <span class="metric-value" style="color: #dc2626;">$60.00 / 10M visitas</span>
+      </div>
+
+      <div class="metric">
+        <span class="metric-label">Método Actual (Storage):</span>
+        <span class="metric-value" style="color: #16a34a;">$1.20 / 10M visitas</span>
+      </div>
+
+      <div class="metric">
+        <span class="metric-label">Ahorro:</span>
+        <span class="metric-value" style="color: #16a34a;">98% 🎉</span>
+      </div>
+    </div>
+
+    <!-- Widget Preview Area -->
+    <div class="card">
+      <h2>👁️ Vista Previa del Widget</h2>
+      <p class="subtitle">El widget de WhatsApp debería aparecer en la esquina inferior derecha</p>
+
+      <div class="status info">
+        ℹ️ Si ves el botón de WhatsApp, significa que el widget está funcionando correctamente
+      </div>
+    </div>
+  </div>
+
+  <!-- Aquí se inyectará el código del widget cuando copies desde el panel -->
+  <!-- PEGAR CÓDIGO DEL WIDGET AQUÍ (OPCIONAL) -->
+
+  <script>
+    let testStartTime;
+    let testData = null;
+
+    async function runTest() {
+      const userId = document.getElementById('userId').value.trim();
+      const projectId = document.getElementById('projectId').value.trim();
+
+      // Validar campos
+      if (!userId || !projectId) {
+        showStatus('error', '❌ Por favor completa ambos campos');
+        return;
+      }
+
+      const button = document.getElementById('runButton');
+      button.disabled = true;
+      button.textContent = '⏳ Ejecutando test...';
+
+      showStatus('info', '⏳ Descargando JSON de Firebase Storage...');
+
+      testStartTime = performance.now();
+
+      // Construir URL del JSON
+      const jsonUrl = `https://firebasestorage.googleapis.com/v0/b/whatsapp-widget-admin.firebasestorage.app/o/widgets%2F${userId}%2F${projectId}.json?alt=media&t=${Date.now()}`;
+
+      try {
+        const response = await fetch(jsonUrl);
+        const testEndTime = performance.now();
+        const loadTime = (testEndTime - testStartTime).toFixed(2);
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+        testData = data;
+
+        // Mostrar resultados
+        document.getElementById('resultsCard').style.display = 'block';
+
+        showStatus('success', `✅ JSON descargado exitosamente de Firebase Storage en ${loadTime}ms`);
+
+        // Mostrar JSON
+        document.getElementById('jsonOutput').textContent = JSON.stringify(data, null, 2);
+
+        // Mostrar métricas
+        const metricsHTML = `
+          <div class="metric">
+            <span class="metric-label">Tiempo de carga:</span>
+            <span class="metric-value">${loadTime} ms</span>
+          </div>
+          <div class="metric">
+            <span class="metric-label">Configuración encontrada:</span>
+            <span class="metric-value">✅ Sí</span>
+          </div>
+          <div class="metric">
+            <span class="metric-label">Agentes configurados:</span>
+            <span class="metric-value">${data.agents?.length || 0}</span>
+          </div>
+          <div class="metric">
+            <span class="metric-label">Última actualización:</span>
+            <span class="metric-value">${data.lastUpdated ? new Date(data.lastUpdated).toLocaleString() : 'N/A'}</span>
+          </div>
+          <div class="metric">
+            <span class="metric-label">Fuente de datos:</span>
+            <span class="metric-value" style="color: #16a34a;">Firebase Storage ✅</span>
+          </div>
+          <div class="metric">
+            <span class="metric-label">Método de carga:</span>
+            <span class="metric-value" style="color: #16a34a;">JSON Estático (Optimizado) 🚀</span>
+          </div>
+        `;
+        document.getElementById('metricsOutput').innerHTML = metricsHTML;
+
+        // Scroll a resultados
+        document.getElementById('resultsCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+      } catch (error) {
+        showStatus('error', `❌ Error: ${error.message}`);
+
+        document.getElementById('resultsCard').style.display = 'block';
+        document.getElementById('jsonOutput').textContent = `Error al descargar el JSON:\n\n${error.message}\n\nPosibles causas:\n1. Los IDs son incorrectos\n2. No has guardado la configuración aún\n3. Las reglas de Storage no están configuradas\n4. El proyecto no existe`;
+
+        const metricsHTML = `
+          <div class="metric">
+            <span class="metric-label">Estado:</span>
+            <span class="metric-value" style="color: #dc2626;">❌ Error</span>
+          </div>
+          <div class="metric">
+            <span class="metric-label">URL intentada:</span>
+            <span class="metric-value" style="font-size: 11px; word-break: break-all;">${jsonUrl}</span>
+          </div>
+        `;
+        document.getElementById('metricsOutput').innerHTML = metricsHTML;
+      } finally {
+        button.disabled = false;
+        button.textContent = '🚀 Ejecutar Test';
+      }
+    }
+
+    function showStatus(type, message) {
+      const statusDiv = document.getElementById('statusMessage');
+      statusDiv.className = `status ${type}`;
+      statusDiv.textContent = message;
+    }
+
+    // Detectar peticiones de red (si DevTools está abierto)
+    window.addEventListener('load', () => {
+      console.log('%c🧪 Test de Optimización del Widget', 'font-size: 20px; font-weight: bold; color: #667eea;');
+      console.log('%c📊 Monitoreo de Red Activo', 'font-size: 14px; color: #10b981;');
+      console.log('%cVerifica que las peticiones sean a firebasestorage.googleapis.com (Storage) y NO a firestore.googleapis.com (Firestore)', 'color: #6b7280;');
+      console.log(' ');
+    });
+
+    // Performance Observer para detectar peticiones
+    if ('PerformanceObserver' in window) {
+      const observer = new PerformanceObserver((list) => {
+        for (const entry of list.getEntries()) {
+          if (entry.initiatorType === 'fetch' || entry.initiatorType === 'xmlhttprequest') {
+            if (entry.name.includes('firebasestorage.googleapis.com')) {
+              console.log('%c✅ Petición a Firebase Storage detectada', 'color: #16a34a; font-weight: bold;');
+              console.log('URL:', entry.name);
+              console.log('Tiempo:', entry.duration.toFixed(2), 'ms');
+            } else if (entry.name.includes('firestore.googleapis.com')) {
+              console.log('%c⚠️ ADVERTENCIA: Petición a Firestore detectada', 'color: #dc2626; font-weight: bold;');
+              console.log('El widget NO debería usar Firestore directamente');
+              console.log('URL:', entry.name);
+            }
+          }
+        }
+      });
+      observer.observe({ entryTypes: ['resource'] });
+    }
+  </script>
+</body>
+</html>
