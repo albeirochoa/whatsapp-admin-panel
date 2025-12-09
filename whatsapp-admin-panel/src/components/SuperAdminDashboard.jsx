@@ -31,6 +31,7 @@ const SuperAdminDashboard = ({ user, onLogout }) => {
       calculateStats(usersList);
     } catch (error) {
       console.error('Error loading users:', error);
+      alert('Error cargando usuarios: ' + (error.message || 'Error desconocido'));
     } finally {
       setLoading(false);
     }
