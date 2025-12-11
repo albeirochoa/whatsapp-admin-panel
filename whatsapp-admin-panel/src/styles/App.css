@@ -58,6 +58,7 @@ body {
   font-weight: 700;
   margin-bottom: 8px;
   background: linear-gradient(135deg, #fff 0%, #94a3b8 100%);
+  background-clip: text;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }
@@ -452,6 +453,12 @@ textarea.form-input {
   border-radius: 8px;
 }
 
+.agent-phone svg {
+  width: 18px;
+  height: 18px;
+  min-width: 18px;
+}
+
 .agent-rules {
   font-size: 12px;
   color: #64748b;
@@ -641,7 +648,7 @@ textarea.form-input {
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
   cursor: pointer;
 }
 

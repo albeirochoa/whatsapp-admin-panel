@@ -12,7 +12,7 @@ import { useProjects } from '../hooks/useProjects';
 import { useAgents } from '../hooks/useAgents';
 import { useConfig } from '../hooks/useConfig';
 
-const Dashboard = ({ user, userData, onLogout }) => {
+const Dashboard = ({ user, userData, onLogout, onSwitchView, isSuperAdmin }) => {
   const { projects, selectedProject, setSelectedProject, createProject, deleteProject } = useProjects(user, userData);
   const { agents, saveAgent, deleteAgent } = useAgents(user, selectedProject, userData);
   const { config, setConfig, saveConfig, publishing } = useConfig(user, selectedProject);
@@ -60,6 +60,32 @@ const Dashboard = ({ user, userData, onLogout }) => {
           selectedProject={selectedProject}
           onSelectProject={setSelectedProject}
           onNewProject={() => setShowProjectModal(true)}
+
+          footerSlot={
+            isSuperAdmin && (
+              <div style={{ padding: '10px 15px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+                <button
+                  onClick={onSwitchView}
+                  style={{
+                    width: '100%',
+                    padding: '8px',
+                    background: 'rgba(255, 255, 255, 0.1)',
+                    border: '1px solid rgba(255, 255, 255, 0.2)',
+                    borderRadius: '6px',
+                    color: '#fff',
+                    cursor: 'pointer',
+                    fontSize: '13px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '6px'
+                  }}
+                >
+                  <span>🛡️</span> Panel Admin
+                </button>
+              </div>
+            )
+          }
         />
 
         <main className="content-area">

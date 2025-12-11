@@ -1,6 +1,6 @@
 import React from 'react';
 
-const Sidebar = ({ projects, selectedProject, onSelectProject, onNewProject }) => {
+const Sidebar = ({ projects, selectedProject, onSelectProject, onNewProject, footerSlot }) => {
   return (
     <aside className="sidebar">
       <div className="sidebar-section">
@@ -22,6 +22,8 @@ const Sidebar = ({ projects, selectedProject, onSelectProject, onNewProject }) =
           </button>
         </div>
       </div>
+
+      {footerSlot}
     </aside>
   );
 };

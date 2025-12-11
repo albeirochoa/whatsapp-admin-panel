@@ -4,7 +4,7 @@ import { db } from '../firebase';
 import { PLANS, ROLES } from '../constants/plans';
 import Header from './Header';
 
-const SuperAdminDashboard = ({ user, onLogout }) => {
+const SuperAdminDashboard = ({ user, onLogout, onSwitchView }) => {
   const [users, setUsers] = useState([]);
   const [stats, setStats] = useState({
     totalUsers: 0,
@@ -109,8 +109,17 @@ const SuperAdminDashboard = ({ user, onLogout }) => {
 
       <div className="super-admin-container">
         <div className="admin-header">
-          <h1 className="admin-title">Super Admin Dashboard</h1>
-          <p className="admin-subtitle">Gestión de usuarios y estadísticas del sistema</p>
+          <div>
+            <h1 className="admin-title">Super Admin Dashboard</h1>
+            <p className="admin-subtitle">Gestión de usuarios y estadísticas del sistema</p>
+          </div>
+          <button
+            className="btn-primary"
+            onClick={onSwitchView}
+            style={{ padding: '10px 20px', display: 'flex', alignItems: 'center', gap: '8px' }}
+          >
+            <span>📂</span> Gestionar Mis Proyectos
+          </button>
         </div>
 
         {/* Stats Cards */}
