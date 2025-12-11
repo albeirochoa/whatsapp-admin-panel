@@ -25,19 +25,27 @@ export const useConfig = (user, selectedProject) => {
   }, [user, selectedProject]);
 
   const saveConfig = async () => {
-    if (!selectedProject || !user) return { success: false };
+    if (!selectedProject || !user) {
+      return { success: false, error: 'Proyecto o usuario no seleccionado' };
+    }
+
+    console.log('🚀 Iniciando guardado y publicación...');
+    setPublishing(true);
 
     try {
-      setPublishing(true);
-
       // 1. Guardar en Firestore (para el panel de administración)
+      console.log('💾 Guardando configuración en Firestore...');
       const projectRef = doc(db, 'users', user.uid, 'projects', selectedProject.id);
+
       await setDoc(projectRef, {
         ...selectedProject,
         config
       }, { merge: true });
 
+      console.log('✅ Configuración guardada en Firestore');
+
       // 2. Obtener los agentes del proyecto
+      console.log('👥 Obteniendo agentes...');
       const agentsRef = collection(db, 'users', user.uid, 'projects', selectedProject.id, 'agents');
       const agentsSnap = await getDocs(agentsRef);
       const agents = agentsSnap.docs.map(doc => ({
@@ -45,35 +53,66 @@ export const useConfig = (user, selectedProject) => {
         ...doc.data()
       }));
 
-      // 3. Publicar JSON estático en Firebase Storage
-      const result = await publishWidgetConfig(
+      console.log(`✅ ${agents.length} agente(s) encontrado(s)`);
+
+      // Validar que hay al menos un agente
+      if (agents.length === 0) {
+        console.warn('⚠️ No hay agentes configurados');
+      }
+
+      // 3. Publicar JSON estático en Firebase Storage con timeout
+      console.log('📤 Publicando widget en Storage...');
+
+      const publishPromise = publishWidgetConfig(
         user.uid,
         selectedProject.id,
         config,
         agents
       );
 
+      // Timeout de 15 segundos
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Timeout: La publicación está tardando más de lo normal')), 15000);
+      });
+
+      const result = await Promise.race([publishPromise, timeoutPromise]);
+
+      console.log('✅ Widget publicado exitosamente');
+      console.log('🔗 URL:', result.publicUrl);
+
       setPublishing(false);
 
       if (result.success) {
         return {
           success: true,
-          message: 'Configuración guardada y widget publicado ✅',
+          message: `✅ Widget publicado con ${agents.length} agente(s)`,
           publicUrl: result.publicUrl
         };
       } else {
         return {
           success: false,
-          error: result.error
+          error: result.error || 'Error desconocido al publicar'
         };
       }
 
     } catch (error) {
       setPublishing(false);
-      console.error('Error saving config:', error);
+      console.error('❌ Error:', error);
+
+      // Mensajes de error más descriptivos
+      let errorMessage = error.message;
+
+      if (error.message.includes('Timeout')) {
+        errorMessage = 'La publicación está tardando demasiado. Verifica tu conexión a internet o las reglas de Storage.';
+      } else if (error.message.includes('permission-denied')) {
+        errorMessage = 'Permisos denegados. Verifica las reglas de Firebase Storage.';
+      } else if (error.message.includes('network')) {
+        errorMessage = 'Error de red. Verifica tu conexión a internet.';
+      }
+
       return {
         success: false,
-        error: error.message
+        error: errorMessage
       };
     }
   };

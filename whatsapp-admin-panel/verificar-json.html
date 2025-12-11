@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Verificar JSON del Widget</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      max-width: 800px;
+      margin: 50px auto;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    .card {
+      background: white;
+      padding: 30px;
+      border-radius: 12px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+    h1 {
+      color: #333;
+      margin-bottom: 20px;
+    }
+    .status {
+      padding: 15px;
+      border-radius: 8px;
+      margin: 20px 0;
+      font-weight: 600;
+    }
+    .success {
+      background: rgba(16, 185, 129, 0.1);
+      border: 2px solid #10b981;
+      color: #047857;
+    }
+    .error {
+      background: rgba(239, 68, 68, 0.1);
+      border: 2px solid #ef4444;
+      color: #991b1b;
+    }
+    .info {
+      background: rgba(59, 130, 246, 0.1);
+      border: 2px solid #3b82f6;
+      color: #1e40af;
+    }
+    button {
+      background: #667eea;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 8px;
+      font-size: 16px;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    button:hover {
+      background: #5568d3;
+    }
+    pre {
+      background: #1f2937;
+      color: #10b981;
+      padding: 20px;
+      border-radius: 8px;
+      overflow-x: auto;
+      font-size: 13px;
+      line-height: 1.6;
+    }
+    .url-display {
+      background: #f9fafb;
+      padding: 12px;
+      border-radius: 6px;
+      border: 1px solid #e5e7eb;
+      word-break: break-all;
+      font-size: 12px;
+      color: #4b5563;
+      margin: 10px 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>🔍 Verificador de JSON del Widget</h1>
+
+    <div class="info">
+      <strong>Tu URL del JSON:</strong>
+      <div class="url-display" id="jsonUrl">
+        https://firebasestorage.googleapis.com/v0/b/whatsapp-widget-admin.appspot.com/o/widgets%2Fa0wJdjZVdXSXLNO89DEdh73zzdh2%2FgZp77xF31rwW78lnwQfa.json?alt=media
+      </div>
+    </div>
+
+    <button onclick="verificarJSON()">🚀 Verificar Ahora</button>
+
+    <div id="resultado"></div>
+  </div>
+
+  <script>
+    async function verificarJSON() {
+      const resultado = document.getElementById('resultado');
+      resultado.innerHTML = '<div class="status info">⏳ Verificando...</div>';
+
+      const url = 'https://firebasestorage.googleapis.com/v0/b/whatsapp-widget-admin.appspot.com/o/widgets%2Fa0wJdjZVdXSXLNO89DEdh73zzdh2%2FgZp77xF31rwW78lnwQfa.json?alt=media&t=' + Date.now();
+
+      try {
+        const response = await fetch(url);
+
+        if (response.status === 404) {
+          resultado.innerHTML = `
+            <div class="status error">
+              <h3>❌ Archivo No Encontrado (404)</h3>
+              <p><strong>Problema:</strong> El archivo JSON no existe en Firebase Storage.</p>
+              <p><strong>Solución:</strong></p>
+              <ol style="margin: 10px 0; padding-left: 20px;">
+                <li>Abre tu panel de admin (npm start)</li>
+                <li>Selecciona el proyecto: gZp77xF31rwW78lnwQfa</li>
+                <li>Ve a "Configuración General"</li>
+                <li>Click en "Guardar y Publicar Widget 🚀"</li>
+                <li>Espera ver: "Widget publicado ✅"</li>
+                <li>Vuelve a hacer clic en "Verificar Ahora" aquí</li>
+              </ol>
+            </div>
+          `;
+          return;
+        }
+
+        if (response.status === 403) {
+          resultado.innerHTML = `
+            <div class="status error">
+              <h3>🔒 Acceso Denegado (403)</h3>
+              <p><strong>Problema:</strong> Las reglas de Firebase Storage no permiten lectura pública.</p>
+              <p><strong>Solución:</strong></p>
+              <ol style="margin: 10px 0; padding-left: 20px;">
+                <li>Ve a: <a href="https://console.firebase.google.com" target="_blank">Firebase Console</a></li>
+                <li>Selecciona tu proyecto</li>
+                <li>Ve a Storage → Rules</li>
+                <li>Copia las reglas del archivo FIREBASE-STORAGE-RULES.md</li>
+                <li>Click en "Publicar"</li>
+              </ol>
+            </div>
+          `;
+          return;
+        }
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+
+        resultado.innerHTML = `
+          <div class="status success">
+            <h3>✅ ¡JSON Encontrado y Descargado!</h3>
+            <p><strong>Estado:</strong> El widget está correctamente publicado</p>
+            <p><strong>Agentes configurados:</strong> ${data.agents?.length || 0}</p>
+            <p><strong>Última actualización:</strong> ${data.lastUpdated ? new Date(data.lastUpdated).toLocaleString() : 'N/A'}</p>
+          </div>
+          <h3 style="margin-top: 20px;">Contenido del JSON:</h3>
+          <pre>${JSON.stringify(data, null, 2)}</pre>
+          <div class="status success" style="margin-top: 20px;">
+            <strong>✅ El widget debería funcionar correctamente ahora</strong>
+            <p>Si aún no aparece el botón, limpia el cache de tu sitio web (Ctrl + Shift + R)</p>
+          </div>
+        `;
+
+      } catch (error) {
+        resultado.innerHTML = `
+          <div class="status error">
+            <h3>❌ Error al Verificar</h3>
+            <p><strong>Error:</strong> ${error.message}</p>
+            <pre>${error.stack}</pre>
+          </div>
+        `;
+      }
+    }
+
+    // Auto-verificar al cargar la página
+    window.addEventListener('load', () => {
+      setTimeout(verificarJSON, 500);
+    });
+  </script>
+</body>
+</html>

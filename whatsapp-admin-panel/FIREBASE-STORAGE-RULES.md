@@ -19,17 +19,16 @@ rules_version = '2';
 
 service firebase.storage {
   match /b/{bucket}/o {
-
-    // Carpeta /widgets - LECTURA PÚBLICA (para el widget)
-    // Solo el owner puede escribir
-    match /widgets/{userId}/{projectId}.json {
+    
+    // CORRECCIÓN: Usamos {fileName} para capturar todo el nombre (ej: "proyecto123.json")
+    match /widgets/{userId}/{fileName} {
       // Cualquiera puede leer (necesario para el widget público)
       allow read: if true;
-
-      // Solo el usuario autenticado dueño puede escribir
+      
+      // Solo el usuario autenticado dueño puede escribir en su carpeta
       allow write: if request.auth != null && request.auth.uid == userId;
     }
-
+    
     // Resto del storage - Privado
     match /{allPaths=**} {
       allow read, write: if request.auth != null;

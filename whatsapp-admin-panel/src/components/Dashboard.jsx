@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import Header from './Header';
 import Sidebar from './Sidebar';
 import ConfigSection from './sections/ConfigSection';
@@ -20,6 +20,7 @@ const Dashboard = ({ user, userData, onLogout, onSwitchView, isSuperAdmin }) => 
   const [showProjectModal, setShowProjectModal] = useState(false);
   const [showAgentModal, setShowAgentModal] = useState(false);
   const [editingAgent, setEditingAgent] = useState(null);
+  const [notification, setNotification] = useState(null);
 
   const handleCreateProject = async (name) => {
     const result = await createProject(name);
@@ -48,6 +49,17 @@ const Dashboard = ({ user, userData, onLogout, onSwitchView, isSuperAdmin }) => 
   const handleAddAgent = () => {
     setEditingAgent(null);
     setShowAgentModal(true);
+  };
+
+  const handleSaveConfig = async () => {
+    const result = await saveConfig();
+    if (result.success) {
+      setNotification({ type: 'success', message: result.message });
+      console.log('✅ URL del widget:', result.publicUrl);
+    } else {
+      setNotification({ type: 'error', message: result.error });
+    }
+    setTimeout(() => setNotification(null), 5000);
   };
 
   return (
@@ -109,7 +121,24 @@ const Dashboard = ({ user, userData, onLogout, onSwitchView, isSuperAdmin }) => 
                 </button>
               </div>
 
-              <ConfigSection config={config} setConfig={setConfig} onSave={saveConfig} publishing={publishing} />
+              {notification && (
+                <div style={{
+                  padding: '16px',
+                  marginBottom: '20px',
+                  borderRadius: '8px',
+                  background: notification.type === 'success'
+                    ? 'rgba(16, 185, 129, 0.1)'
+                    : 'rgba(239, 68, 68, 0.1)',
+                  border: `2px solid ${notification.type === 'success' ? '#10b981' : '#ef4444'}`,
+                  color: notification.type === 'success' ? '#047857' : '#991b1b',
+                  fontSize: '14px',
+                  fontWeight: '600'
+                }}>
+                  {notification.type === 'success' ? '✅' : '❌'} {notification.message}
+                </div>
+              )}
+
+              <ConfigSection config={config} setConfig={setConfig} onSave={handleSaveConfig} publishing={publishing} />
               <AgentsSection
                 agents={agents}
                 onAddAgent={handleAddAgent}
