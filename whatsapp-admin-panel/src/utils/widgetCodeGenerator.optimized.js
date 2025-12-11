@@ -11,7 +11,7 @@ export const generateOptimizedWidgetCode = (user, selectedProject) => {
   const projectId = selectedProject.id;
 
   // URL del JSON estático en Firebase Storage
-  const configUrl = `https://firebasestorage.googleapis.com/v0/b/whatsapp-widget-admin.appspot.com/o/widgets%2F${userId}%2F${projectId}.json?alt=media`;
+  const configUrl = `https://firebasestorage.googleapis.com/v0/b/whatsapp-widget-admin.firebasestorage.app/o/widgets%2F${userId}%2F${projectId}.json?alt=media`;
 
   return `<!-- WhatsApp Widget Optimizado - ${selectedProject.name} -->
 <!-- Actualización automática desde el panel -->

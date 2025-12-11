@@ -67,3 +67,12 @@ node_modules/
 
 # dataconnect generated files
 .dataconnect
+
+# Documentación de troubleshooting (temporal)
+FIRESTORE-RULES.md
+SOLUCION-CORS-STORAGE.md
+SOLUCION-DATOS-INCOMPLETOS.md
+SOLUCION-URL-INCORRECTA.md
+PASOS-FINALES.md
+verificar-json.html
+

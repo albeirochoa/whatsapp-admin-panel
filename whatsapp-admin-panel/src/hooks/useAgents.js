@@ -9,12 +9,16 @@ export const useAgents = (user, selectedProject, userData) => {
   useEffect(() => {
     if (!user || !selectedProject) return;
 
+    console.log('👥 Cargando agentes del proyecto:', selectedProject.name, selectedProject.id);
+
     const agentsRef = collection(db, 'users', user.uid, 'projects', selectedProject.id, 'agents');
     const unsubscribe = onSnapshot(agentsRef, (snapshot) => {
       const agentsList = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       }));
+
+      console.log(`✅ ${agentsList.length} agente(s) en proyecto ${selectedProject.name}`);
       setAgents(agentsList);
 
       // Update user usage count
@@ -30,6 +34,8 @@ export const useAgents = (user, selectedProject, userData) => {
   }, [user, selectedProject]);
 
   const saveAgent = async (agentForm, editingAgent = null) => {
+    console.log('💾 Guardando agente en proyecto:', selectedProject?.name, selectedProject?.id);
+
     if (!selectedProject || !user || !userData) return { success: false, error: 'Datos incompletos' };
 
     // Check plan limits for new agents only

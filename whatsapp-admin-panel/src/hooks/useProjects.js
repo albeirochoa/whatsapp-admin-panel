@@ -35,11 +35,28 @@ export const useProjects = (user, userData) => {
   }, [user]);
 
   const createProject = async (name) => {
-    if (!name.trim() || !user || !userData) return { success: false, error: 'Datos incompletos' };
+    console.log('📝 Creando proyecto:', { name, user: !!user, userData: !!userData });
+
+    if (!name || !name.trim()) {
+      return { success: false, error: 'Por favor ingresa un nombre para el proyecto' };
+    }
+
+    if (!user) {
+      return { success: false, error: 'Usuario no autenticado' };
+    }
+
+    if (!userData) {
+      console.warn('⚠️ userData no disponible, esperando...');
+      return { success: false, error: 'Cargando datos de usuario, intenta nuevamente en un momento' };
+    }
 
     // Check plan limits
     const userPlan = userData.subscription?.plan || 'free';
-    if (!canCreateProject(userData.role, projects.length, userPlan)) {
+    const userRole = userData.role || 'client';
+
+    console.log('📊 Validando límites:', { userPlan, userRole, currentProjects: projects.length });
+
+    if (!canCreateProject(userRole, projects.length, userPlan)) {
       return {
         success: false,
         error: 'Has alcanzado el límite de proyectos de tu plan. Actualiza para crear más.'
