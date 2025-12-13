@@ -1,8 +1,10 @@
 import { ref, uploadString, getDownloadURL, deleteObject } from 'firebase/storage';
 import { storage } from '../firebase';
+import { generateWidgetJS } from './widgetJsGenerator';
 
 /**
  * Publica la configuración del widget como JSON estático en Firebase Storage
+ * ADEMÁS publica el código JavaScript del widget
  * Esto evita lecturas costosas de Firestore desde el widget público
  */
 export const publishWidgetConfig = async (userId, projectId, config, agents) => {
@@ -31,10 +33,10 @@ export const publishWidgetConfig = async (userId, projectId, config, agents) => 
     const jsonString = JSON.stringify(widgetData, null, 2);
 
     // 3. Crear referencia en Storage: widgets/{userId}/{projectId}.json
-    const storageRef = ref(storage, `widgets/${userId}/${projectId}.json`);
+    const jsonRef = ref(storage, `widgets/${userId}/${projectId}.json`);
 
-    // 4. Subir el archivo con metadata correcta
-    await uploadString(storageRef, jsonString, 'raw', {
+    // 4. Subir el archivo JSON con metadata correcta
+    await uploadString(jsonRef, jsonString, 'raw', {
       contentType: 'application/json',
       cacheControl: 'public, max-age=300', // Cache de 5 minutos
       customMetadata: {
@@ -43,12 +45,29 @@ export const publishWidgetConfig = async (userId, projectId, config, agents) => 
       }
     });
 
-    // 5. Obtener la URL pública
-    const publicUrl = await getDownloadURL(storageRef);
+    // 5. Obtener la URL pública del JSON
+    const jsonUrl = await getDownloadURL(jsonRef);
+
+    // 6. NUEVO: Generar y subir el código JavaScript puro
+    const jsCode = generateWidgetJS(jsonUrl);
+    const jsRef = ref(storage, `widgets/${userId}/${projectId}.js`);
+
+    await uploadString(jsRef, jsCode, 'raw', {
+      contentType: 'application/javascript',
+      cacheControl: 'public, max-age=3600', // Cache de 1 hora (más largo que JSON)
+      customMetadata: {
+        projectId: projectId,
+        lastModified: new Date().toISOString()
+      }
+    });
+
+    // 7. Obtener la URL pública del JavaScript
+    const jsUrl = await getDownloadURL(jsRef);
 
     return {
       success: true,
-      publicUrl,
+      jsonUrl,
+      jsUrl, // Nueva URL para el archivo .js
       message: 'Widget publicado exitosamente'
     };
 
@@ -62,13 +81,21 @@ export const publishWidgetConfig = async (userId, projectId, config, agents) => 
 };
 
 /**
- * Genera la URL pública del widget sin necesidad de subirlo
- * Útil para mostrar la URL antes de guardar
+ * Genera las URLs públicas del widget sin necesidad de subirlo
+ * Útil para mostrar las URLs antes de guardar
  */
 export const getWidgetPublicUrl = (userId, projectId) => {
   // URL directa de Firebase Storage (formato alt=media para descarga directa)
   const bucketUrl = storage.app.options.storageBucket;
   return `https://firebasestorage.googleapis.com/v0/b/${bucketUrl}/o/widgets%2F${userId}%2F${projectId}.json?alt=media`;
+};
+
+/**
+ * Genera la URL pública del archivo JavaScript
+ */
+export const getWidgetJsUrl = (userId, projectId) => {
+  const bucketUrl = storage.app.options.storageBucket;
+  return `https://firebasestorage.googleapis.com/v0/b/${bucketUrl}/o/widgets%2F${userId}%2F${projectId}.js?alt=media`;
 };
 
 /**
