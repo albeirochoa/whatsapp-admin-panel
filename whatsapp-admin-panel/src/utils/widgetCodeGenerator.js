@@ -195,6 +195,27 @@ export const generateWidgetCode = (user, selectedProject) => {
     return filtered.length > 0 ? url + '?' + filtered.join('&') : url;
   }
 
+  function getGclid() {
+    var match = document.cookie.match(new RegExp('(^| )_gcl_aw=([^;]+)'));
+    if (match) return match[2];
+
+    try {
+      return localStorage.getItem('_gcl_aw');
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function getGclidHash() {
+    var match = document.cookie.match(new RegExp('(^| )_gcl_hash=([^;]+)'));
+    if (match) return match[2];
+
+    try {
+      return localStorage.getItem('_gcl_hash');
+    } catch (e) {
+      return null;
+    }
+  }
 
   function shouldShowOnPage(agent) {
     var currentUrl = window.location.href.toLowerCase();
@@ -258,6 +279,8 @@ export const generateWidgetCode = (user, selectedProject) => {
   function openWhatsApp(phone, agentName) {
     var clickData = null;
     var trackingRef = '';
+    var gclid = getGclid();
+    var gclidHash = getGclidHash();
 
     // Usar nuevo sistema de tracking si está habilitado
     if (widgetConfig.enableTracking !== false) {
@@ -278,6 +301,8 @@ export const generateWidgetCode = (user, selectedProject) => {
 
     if (trackingRef) {
       message += ' ' + trackingRef;
+    } else if (gclidHash) {
+      message += ' 📋 Ref: #' + gclidHash;
     }
 
     message += ' 🔗 ' + getCurrentUrl();
@@ -293,10 +318,15 @@ export const generateWidgetCode = (user, selectedProject) => {
     }
 
     sendWebhook({
+      // Campos nuevos (sistema mejorado)
       click_id: clickData ? clickData.id : null,
       click_id_type: clickData ? clickData.type : null,
       click_id_source: clickData ? clickData.source : null,
       click_id_age_days: clickData ? clickData.age : null,
+      // Campos legacy (compatibilidad hacia atrás)
+      gclid: gclid || null,
+      gclid_hash: gclidHash || null,
+      // Campos comunes
       phone_e164: phone,
       agent_selected: agentName || 'default',
       first_click_time_iso: new Date().toISOString(),
