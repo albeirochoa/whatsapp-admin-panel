@@ -24,6 +24,103 @@ export const generateOptimizedWidgetCode = (user, selectedProject) => {
   var CONFIG_URL = '${configUrl}';
   var widgetConfig = null;
   var widgetAgents = [];
+  var CLICK_KEY = 'ww_click_id';
+
+  // ==========================================
+  // TRACKING UTILITIES
+  // ==========================================
+
+  function getShortHash(str) {
+    if (!str) return null;
+    var hash = 0;
+    for (var i = 0; i < str.length; i++) {
+      var chr = str.charCodeAt(i);
+      hash = ((hash << 5) - hash) + chr;
+      hash |= 0;
+    }
+    var shortHash = Math.abs(hash).toString(36).substring(0, 5);
+    while (shortHash.length < 5) shortHash += '0';
+    return shortHash.toUpperCase();
+  }
+
+  function readUrlClickId() {
+    try {
+      var params = new URLSearchParams(window.location.search);
+      var types = ['gclid', 'gbraid', 'wbraid'];
+      for (var i = 0; i < types.length; i++) {
+        var val = params.get(types[i]);
+        if (val) {
+          return { id: val, type: types[i], source: 'url', ts: Date.now() };
+        }
+      }
+    } catch (e) {}
+    return null;
+  }
+
+  function persistClickId(data) {
+    if (!data || !data.id) return;
+    try {
+      localStorage.setItem(CLICK_KEY, JSON.stringify(data));
+    } catch (e) {}
+    try {
+      var maxAge = 90 * 24 * 60 * 60;
+      document.cookie = CLICK_KEY + '=' + encodeURIComponent(JSON.stringify(data)) +
+        '; path=/; max-age=' + maxAge + '; samesite=lax';
+    } catch (e) {}
+  }
+
+  function readStoredClickId() {
+    try {
+      var raw = localStorage.getItem(CLICK_KEY);
+      if (raw) return JSON.parse(raw);
+    } catch (e) {}
+    try {
+      var match = document.cookie.match(new RegExp('(^| )' + CLICK_KEY + '=([^;]+)'));
+      if (match) return JSON.parse(decodeURIComponent(match[2]));
+    } catch (e) {}
+    return null;
+  }
+
+  function readGoogleCookie() {
+    try {
+      var match = document.cookie.match(new RegExp('(^| )_gcl_aw=([^;]+)'));
+      if (match) return match[2];
+      return localStorage.getItem('_gcl_aw');
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function getClickId(maxAgeDays) {
+    maxAgeDays = maxAgeDays || 90;
+
+    var urlData = readUrlClickId();
+    if (urlData) {
+      persistClickId(urlData);
+      return { id: urlData.id, type: urlData.type, source: 'url', ageDays: 0 };
+    }
+
+    var stored = readStoredClickId();
+    if (stored && stored.id && stored.ts) {
+      var ageMs = Date.now() - stored.ts;
+      var ageDays = Math.floor(ageMs / (24 * 60 * 60 * 1000));
+      if (ageDays <= maxAgeDays) {
+        return {
+          id: stored.id,
+          type: stored.type || 'gclid',
+          source: stored.source || 'storage',
+          ageDays: ageDays
+        };
+      }
+    }
+
+    var gcl = readGoogleCookie();
+    if (gcl) {
+      return { id: gcl, type: 'gcl_aw', source: 'google_cookie', ageDays: null };
+    }
+
+    return { id: null, type: null, source: 'none', ageDays: null };
+  }
 
   // ==========================================
   // UTILIDADES
@@ -137,17 +234,15 @@ export const generateOptimizedWidgetCode = (user, selectedProject) => {
   }
 
   function openWhatsApp(phone, agentName) {
-    var gclid = getGclid();
-    var gclidHash = getGclidHash();
+    var clickInfo = getClickId(widgetConfig.trackingMaxAgeDays || 90);
+    var hashRef = clickInfo.id ? getShortHash(clickInfo.id) : null;
+    var gclidField = clickInfo.type === 'gclid' ? clickInfo.id : null;
 
-    var message = (widgetConfig.message || '¡Hola! 👋') +
-                  ' 📄 ' + document.title;
-
-    if (gclidHash) {
-      message += ' 📋 Ref: #' + gclidHash;
+    var message = (widgetConfig.message || 'Hola!') + ' - ' + document.title;
+    if (hashRef) {
+      message += ' Ref: #' + hashRef;
     }
-
-    message += ' 🔗 ' + getCurrentUrl();
+    message += ' - ' + getCurrentUrl();
 
     var url = isMobile()
       ? 'https://wa.me/' + phone + '?text=' + encodeURIComponent(message)
@@ -160,8 +255,12 @@ export const generateOptimizedWidgetCode = (user, selectedProject) => {
     }
 
     sendWebhook({
-      gclid: gclid || null,
-      gclid_hash: gclidHash || null,
+      click_id: clickInfo.id || null,
+      click_id_type: clickInfo.type || null,
+      click_id_source: clickInfo.source || null,
+      click_id_age_days: clickInfo.ageDays,
+      gclid: gclidField || null,
+      gclid_hash: hashRef || null,
       phone_e164: phone,
       agent_selected: agentName || 'default',
       first_click_time_iso: new Date().toISOString(),
@@ -177,8 +276,9 @@ export const generateOptimizedWidgetCode = (user, selectedProject) => {
         event: 'whatsapp_lead_click',
         lead_platform: 'whatsapp',
         agent_name: agentName || 'default',
-        lead_traffic: gclid ? 'paid_google' : 'organic',
-        lead_ref: gclidHash || 'sin_ref'
+        lead_traffic: clickInfo.id ? 'paid_google' : 'organic',
+        lead_ref: hashRef || 'sin_ref',
+        click_id_type: clickInfo.type || null
       });
     }
   }
