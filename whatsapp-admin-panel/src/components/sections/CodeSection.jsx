@@ -1,11 +1,11 @@
 import { useState } from 'react';
-import { generateOptimizedWidgetCode } from '../../utils/widgetCodeGenerator.optimized';
+import { generateWidgetCode } from '../../utils/widgetCodeGenerator';
 
 const CodeSection = ({ user, selectedProject }) => {
   const [copied, setCopied] = useState(false);
 
   const copyCode = () => {
-    const code = generateOptimizedWidgetCode(user, selectedProject);
+    const code = generateWidgetCode(user, selectedProject);
     navigator.clipboard.writeText(code);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
@@ -37,7 +37,7 @@ const CodeSection = ({ user, selectedProject }) => {
         ✅ Código optimizado - Lee de Firebase Storage (98% menos costo)
       </div>
       <pre className="code-block">
-        <code>{generateOptimizedWidgetCode(user, selectedProject)}</code>
+        <code>{generateWidgetCode(user, selectedProject)}</code>
       </pre>
     </div>
   );
