@@ -76,9 +76,89 @@ const ConfigSection = ({ config, setConfig, onSave, publishing }) => {
           </select>
         </div>
       </div>
+
+      <div style={{ marginTop: '20px', paddingTop: '20px', borderTop: '1px solid #e5e7eb' }}>
+        <h4 style={{ fontSize: '14px', fontWeight: '600', marginBottom: '16px', color: '#374151' }}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: '8px', verticalAlign: 'middle' }}>
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+            <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+          </svg>
+          Tracking & Privacidad
+        </h4>
+
+        <div className="form-grid">
+          <div className="form-group full-width">
+            <label className="form-label" style={{ display: 'flex', alignItems: 'start', cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={config.enableTracking !== false}
+                onChange={(e) => setConfig({ ...config, enableTracking: e.target.checked })}
+                style={{ marginRight: '8px', marginTop: '2px' }}
+              />
+              <span>
+                <strong>Habilitar tracking de Google Ads (gclid/gbraid/wbraid)</strong>
+                <p style={{ fontSize: '12px', color: '#666', marginTop: '4px', fontWeight: 'normal' }}>
+                  Captura automáticamente IDs de campaña para atribución de conversiones
+                </p>
+              </span>
+            </label>
+          </div>
+
+          {config.enableTracking !== false && (
+            <>
+              <div className="form-group full-width">
+                <label className="form-label" style={{ display: 'flex', alignItems: 'start', cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={config.requireConsent !== false}
+                    onChange={(e) => setConfig({ ...config, requireConsent: e.target.checked })}
+                    style={{ marginRight: '8px', marginTop: '2px' }}
+                  />
+                  <span>
+                    <strong>Requerir consentimiento GDPR antes de guardar datos</strong>
+                    <p style={{ fontSize: '12px', color: '#666', marginTop: '4px', fontWeight: 'normal' }}>
+                      Cumple con regulaciones europeas de privacidad (recomendado para EU)
+                    </p>
+                  </span>
+                </label>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Días de persistencia del tracking</label>
+                <input
+                  type="number"
+                  className="form-input"
+                  value={config.trackingMaxAgeDays || 90}
+                  onChange={(e) => setConfig({ ...config, trackingMaxAgeDays: parseInt(e.target.value) || 90 })}
+                  min="1"
+                  max="365"
+                />
+                <p style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>
+                  Tiempo máximo que se conserva el ID de campaña (1-365 días)
+                </p>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Formato del tracking en mensaje</label>
+                <input
+                  type="text"
+                  className="form-input"
+                  value={config.trackingFormat || '[ref:{id}]'}
+                  onChange={(e) => setConfig({ ...config, trackingFormat: e.target.value })}
+                  placeholder="[ref:{id}]"
+                />
+                <p style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>
+                  Usa {'{id}'}, {'{type}'}, {'{source}'} como variables
+                </p>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+
       <button
         className="add-agent-btn"
-        style={{ marginTop: '12px' }}
+        style={{ marginTop: '20px' }}
         onClick={onSave}
         disabled={publishing}
       >

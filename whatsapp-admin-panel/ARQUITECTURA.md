@@ -186,6 +186,8 @@
 ### 🔧 Utils
 **Responsabilidad:** Funciones auxiliares
 - widgetCodeGenerator: Genera código del widget
+- trackingUtils: Gestión de Click IDs (gclid/gbraid/wbraid) con validación y GDPR
+- staticJsonPublisher: Publicación en Firebase Storage
 
 ### 💅 Styles
 **Responsabilidad:** Estilos CSS
@@ -322,3 +324,269 @@ whatsapp-admin-panel/
 ```
 
 **Resultado:** Código mantenible, escalable y profesional ✅
+
+---
+
+## Sistema de Tracking Avanzado (Google Ads Click IDs)
+
+### Objetivo
+Capturar y persistir Click IDs de Google Ads (gclid, gbraid, wbraid) para atribución de conversiones, cumpliendo con GDPR.
+
+### Arquitectura del Sistema de Tracking
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    Usuario visita landing page                   │
+│                    ?gclid=ABC123... (URL param)                  │
+└───────────────────────────┬─────────────────────────────────────┘
+                            │
+                            ▼
+┌─────────────────────────────────────────────────────────────────┐
+│              Widget cargado (widgetCodeGenerator.js)             │
+│                                                                  │
+│  ┌────────────────────────────────────────────────────────┐    │
+│  │            TrackingUtils (auto-ejecuta)                 │    │
+│  │                                                         │    │
+│  │  1. captureClickIds(requireConsent)                    │    │
+│  │     ├─ Verifica consentimiento GDPR                    │    │
+│  │     ├─ Lee URL params (gclid, gbraid, wbraid)          │    │
+│  │     ├─ Valida formato (regex /^[A-Za-z0-9_-]{20,}$/)   │    │
+│  │     └─ Persiste en localStorage + cookie               │    │
+│  │                                                         │    │
+│  │  2. Datos persistidos:                                 │    │
+│  │     {                                                   │    │
+│  │       id: "ABC123...",                                 │    │
+│  │       timestamp: 1234567890,                           │    │
+│  │       source: "url"                                    │    │
+│  │     }                                                   │    │
+│  └────────────────────────────────────────────────────────┘    │
+└─────────────────────────────────────────────────────────────────┘
+                            │
+                            │ Usuario navega por el sitio
+                            │ (gclid ya NO está en URL)
+                            ▼
+┌─────────────────────────────────────────────────────────────────┐
+│              Usuario hace clic en widget WhatsApp                │
+│                                                                  │
+│  ┌────────────────────────────────────────────────────────┐    │
+│  │      openWhatsApp() → getBestClickId(maxAge)           │    │
+│  │                                                         │    │
+│  │  PRIORIDAD 1: URL params (más confiable)              │    │
+│  │  PRIORIDAD 2: localStorage propio (con validación)     │    │
+│  │  PRIORIDAD 3: Cookie propia                            │    │
+│  │  PRIORIDAD 4: Cookie Google _gcl_aw (fallback)         │    │
+│  │                                                         │    │
+│  │  Retorna: { id, type, source, age }                    │    │
+│  └────────────────────────────────────────────────────────┘    │
+│                                                                  │
+│  Mensaje WhatsApp generado:                                     │
+│  "¡Hola! 👋 [ref:ABC123] 🔗 https://ejemplo.com"               │
+└─────────────────────────────────────────────────────────────────┘
+                            │
+                            ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                  Webhook enviado a Make/n8n                      │
+│                                                                  │
+│  {                                                               │
+│    "click_id": "ABC123...",                                     │
+│    "click_id_type": "gclid",                                    │
+│    "click_id_source": "storage",                                │
+│    "click_id_age_days": 3,                                      │
+│    "phone_e164": "+1234567890",                                 │
+│    "agent_selected": "Ventas",                                  │
+│    ...                                                           │
+│  }                                                               │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Configuración en el Panel Admin
+
+```javascript
+// En ConfigSection.jsx
+{
+  enableTracking: true,              // ✅ Habilitar tracking (default: true)
+  requireConsent: true,              // ✅ Requerir GDPR (default: true)
+  trackingMaxAgeDays: 90,            // Días de persistencia (default: 90)
+  trackingFormat: '[ref:{id}]'       // Formato en mensaje (personalizable)
+}
+```
+
+### Tipos de Click IDs Soportados
+
+| Tipo | Descripción | Plataforma | Formato |
+|------|-------------|------------|---------|
+| `gclid` | Google Click ID | Google Ads (general) | `Cj0KCQiA...` (20+ chars) |
+| `gbraid` | Google Brand Click ID | iOS 14.5+ (Safari) | `1A2B3C...` (20+ chars) |
+| `wbraid` | Web Brand Click ID | Cross-platform | `1X2Y3Z...` (20+ chars) |
+| `_gcl_aw` | Cookie Google (fallback) | Legacy | Variable |
+
+### Validación de Formato
+
+```javascript
+// Regex para validar Click IDs
+/^[A-Za-z0-9_-]{20,}$/
+
+// Ejemplos válidos:
+✅ "Cj0KCQiA_8KvBhD8ARIsAD52u98H..."
+✅ "1A2B3C4D5E6F7G8H9I0J1K2L3M..."
+
+// Ejemplos inválidos:
+❌ "abc" (muy corto)
+❌ "hello world" (espacios)
+❌ "test@#$" (caracteres especiales)
+```
+
+### Expiración y Limpieza Automática
+
+- Click IDs tienen **TTL configurable** (default: 90 días)
+- **Limpieza automática** al consultar:
+  ```javascript
+  if (ageMs >= maxAgeMs) {
+    localStorage.removeItem('last_gclid');
+    console.info('Expired gclid removed');
+  }
+  ```
+- Previene datos obsoletos que distorsionen atribución
+
+### Cumplimiento GDPR
+
+#### Verificación de Consentimiento
+```javascript
+hasStorageConsent() {
+  // 1. Flag global
+  if (window.cookieConsentGranted === true) return true;
+
+  // 2. localStorage consent
+  const consent = localStorage.getItem('cookie_consent');
+  if (consent && consent.analytics === true) return true;
+
+  // 3. Sin sistema configurado = permitir (configurable)
+  return true;
+}
+```
+
+#### Gestión de Consentimiento
+```javascript
+// Otorgar consentimiento
+TrackingUtils.setStorageConsent(true);
+// → Captura automáticamente Click IDs disponibles
+
+// Revocar consentimiento
+TrackingUtils.setStorageConsent(false);
+// → Limpia TODOS los Click IDs almacenados
+```
+
+### Casos de Uso Reales
+
+#### Caso 1: Conversión Inmediata
+```
+Usuario:
+1. Clic en anuncio Google → landing.com?gclid=ABC123
+2. TrackingUtils captura → localStorage
+3. Click en WhatsApp → Mensaje: "[ref:ABC123]"
+4. Webhook: { click_id: "ABC123", source: "url", age: 0 }
+```
+
+#### Caso 2: Conversión Tardía (3 días después)
+```
+Usuario:
+1. Día 1: Clic en anuncio → gclid guardado
+2. Día 3: Vuelve directo (sin gclid en URL)
+3. Click en WhatsApp → TrackingUtils recupera de localStorage
+4. Webhook: { click_id: "ABC123", source: "storage", age: 3 }
+```
+
+#### Caso 3: iOS Safari (gbraid)
+```
+Usuario iOS 14.5+:
+1. Clic en anuncio → landing.com?gbraid=XYZ789
+2. TrackingUtils detecta → valida → guarda
+3. Mensaje: "[ref:XYZ789]"
+4. Webhook: { click_id_type: "gbraid", ... }
+```
+
+### Beneficios vs Implementación ChatGPT
+
+| Aspecto | ChatGPT (vanilla JS) | Nuestra Implementación |
+|---------|---------------------|------------------------|
+| **Arquitectura** | ❌ Global script | ✅ Utility module + React hook |
+| **Validación** | ❌ Sin validación | ✅ Regex + formato + TTL |
+| **GDPR** | ❌ No considera | ✅ Consentimiento + limpieza |
+| **Expiración** | ❌ 90 días fijos | ✅ Configurable + auto-cleanup |
+| **Debugging** | ❌ Solo console.log | ✅ getDebugInfo() completo |
+| **Testing** | ❌ Difícil | ✅ Module exportable |
+| **Mantenimiento** | ❌ Código acoplado | ✅ Separado en utils/ |
+
+### Debug y Monitoreo
+
+```javascript
+// En consola del navegador
+TrackingUtils.getDebugInfo()
+
+// Output:
+{
+  currentClickId: {
+    id: "ABC123...",
+    type: "gclid",
+    source: "storage",
+    age: 3,
+    valid: true
+  },
+  urlParams: {
+    gclid: null,
+    gbraid: null,
+    wbraid: null
+  },
+  storage: {
+    gclid: "{\"id\":\"ABC123\",\"timestamp\":1234567890}",
+    gbraid: null,
+    wbraid: null
+  },
+  consent: true,
+  cookies: {
+    _gcl_aw: "GCL.1234567890.ABC123"
+  }
+}
+```
+
+### Integración con Google Analytics
+
+```javascript
+// Evento automático en dataLayer
+window.dataLayer.push({
+  event: 'whatsapp_lead_click',
+  lead_platform: 'whatsapp',
+  agent_name: 'Ventas',
+  lead_traffic: 'paid_google',      // ← Detectado automáticamente
+  lead_ref: '[ref:ABC123]',
+  click_id_type: 'gclid'            // ← Tipo específico
+});
+```
+
+### Métricas de Atribución
+
+Con el nuevo sistema puedes responder:
+
+1. **¿Cuántos leads vienen de Google Ads?**
+   - `click_id !== null && click_id_type === 'gclid'`
+
+2. **¿Cuál es el tiempo promedio hasta conversión?**
+   - `AVG(click_id_age_days)`
+
+3. **¿Qué porcentaje es atribución directa vs tardía?**
+   - `click_id_source === 'url'` vs `'storage'`
+
+4. **¿iOS tiene mejor conversión que Android?**
+   - `click_id_type === 'gbraid'` vs `'gclid'`
+
+### Seguridad y Privacidad
+
+✅ **Cookie SameSite=Lax**: Previene CSRF
+✅ **Secure flag en HTTPS**: Solo transmite por conexión segura
+✅ **Try-catch global**: No rompe widget si falla tracking
+✅ **Sin PII**: Solo almacena Click IDs (no info personal)
+✅ **Limpieza automática**: Datos expirados se borran
+✅ **Consentimiento explícito**: Usuario controla su privacidad
+
+---
+

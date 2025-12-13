@@ -26,6 +26,146 @@ export const generateWidgetCode = (user, selectedProject) => {
   var widgetAgents = [];
 
   // ==========================================
+  // TRACKING UTILITIES (Google Ads Click IDs)
+  // ==========================================
+
+  var TrackingUtils = {
+    isValidClickId: function(value, type) {
+      if (!value || typeof value !== 'string') return false;
+      return /^[A-Za-z0-9_-]{20,}$/.test(value);
+    },
+
+    captureClickIds: function(requireConsent) {
+      if (requireConsent && !this.hasStorageConsent()) return;
+
+      try {
+        var params = new URLSearchParams(window.location.search);
+        var clickIds = {
+          gclid: params.get('gclid'),
+          gbraid: params.get('gbraid'),
+          wbraid: params.get('wbraid')
+        };
+
+        for (var type in clickIds) {
+          var value = clickIds[type];
+          if (value && this.isValidClickId(value, type)) {
+            this.persistClickId(type, value, !requireConsent);
+          }
+        }
+      } catch (e) {}
+    },
+
+    persistClickId: function(type, value, useCookies) {
+      var data = {
+        id: value,
+        timestamp: Date.now(),
+        source: 'url'
+      };
+
+      try {
+        localStorage.setItem('last_' + type, JSON.stringify(data));
+        if (useCookies) {
+          this.setCookie('last_' + type, value, 90);
+        }
+      } catch (e) {}
+    },
+
+    getBestClickId: function(maxAgeDays) {
+      maxAgeDays = maxAgeDays || 90;
+      var maxAgeMs = maxAgeDays * 24 * 60 * 60 * 1000;
+      var now = Date.now();
+
+      // Prioridad 1: URL params
+      try {
+        var params = new URLSearchParams(window.location.search);
+        var types = ['gclid', 'gbraid', 'wbraid'];
+        for (var i = 0; i < types.length; i++) {
+          var value = params.get(types[i]);
+          if (value && this.isValidClickId(value, types[i])) {
+            return { id: value, type: types[i], source: 'url', age: 0 };
+          }
+        }
+      } catch (e) {}
+
+      // Prioridad 2: localStorage
+      for (var j = 0; j < types.length; j++) {
+        try {
+          var stored = localStorage.getItem('last_' + types[j]);
+          if (stored) {
+            var data = JSON.parse(stored);
+            var ageMs = now - data.timestamp;
+            var ageDays = Math.floor(ageMs / (24 * 60 * 60 * 1000));
+
+            if (ageMs < maxAgeMs && this.isValidClickId(data.id, types[j])) {
+              return { id: data.id, type: types[j], source: 'storage', age: ageDays };
+            } else if (ageMs >= maxAgeMs) {
+              localStorage.removeItem('last_' + types[j]);
+            }
+          }
+        } catch (e) {}
+      }
+
+      // Prioridad 3: Cookie propia
+      for (var k = 0; k < types.length; k++) {
+        var cookieValue = this.getCookie('last_' + types[k]);
+        if (cookieValue && this.isValidClickId(cookieValue, types[k])) {
+          return { id: cookieValue, type: types[k], source: 'cookie', age: null };
+        }
+      }
+
+      // Prioridad 4: Cookie de Google (fallback legacy)
+      var gclCookie = this.getCookie('_gcl_aw');
+      if (gclCookie) {
+        return { id: gclCookie, type: 'gcl_aw', source: 'google_cookie', age: null };
+      }
+
+      return { id: null, type: null, source: 'none', age: null };
+    },
+
+    hasStorageConsent: function() {
+      try {
+        if (typeof window.cookieConsentGranted !== 'undefined') {
+          return window.cookieConsentGranted === true;
+        }
+        var consent = localStorage.getItem('cookie_consent');
+        if (consent) {
+          var data = JSON.parse(consent);
+          return data.analytics === true || data.all === true;
+        }
+        return true;
+      } catch (e) {
+        return false;
+      }
+    },
+
+    setCookie: function(name, value, days) {
+      try {
+        var maxAge = days * 24 * 60 * 60;
+        var secure = window.location.protocol === 'https:' ? '; secure' : '';
+        document.cookie = name + '=' + encodeURIComponent(value) + '; path=/; max-age=' + maxAge + '; samesite=lax' + secure;
+      } catch (e) {}
+    },
+
+    getCookie: function(name) {
+      try {
+        var match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
+        return match ? decodeURIComponent(match[2]) : null;
+      } catch (e) {
+        return null;
+      }
+    }
+  };
+
+  // Auto-captura al cargar (se ejecutará con la config del widget)
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function() {
+      TrackingUtils.captureClickIds(true);
+    });
+  } else {
+    TrackingUtils.captureClickIds(true);
+  }
+
+  // ==========================================
   // UTILIDADES
   // ==========================================
 
@@ -55,27 +195,6 @@ export const generateWidgetCode = (user, selectedProject) => {
     return filtered.length > 0 ? url + '?' + filtered.join('&') : url;
   }
 
-  function getGclid() {
-    var match = document.cookie.match(new RegExp('(^| )_gcl_aw=([^;]+)'));
-    if (match) return match[2];
-
-    try {
-      return localStorage.getItem('_gcl_aw');
-    } catch (e) {
-      return null;
-    }
-  }
-
-  function getGclidHash() {
-    var match = document.cookie.match(new RegExp('(^| )_gcl_hash=([^;]+)'));
-    if (match) return match[2];
-
-    try {
-      return localStorage.getItem('_gcl_hash');
-    } catch (e) {
-      return null;
-    }
-  }
 
   function shouldShowOnPage(agent) {
     var currentUrl = window.location.href.toLowerCase();
@@ -137,14 +256,28 @@ export const generateWidgetCode = (user, selectedProject) => {
   }
 
   function openWhatsApp(phone, agentName) {
-    var gclid = getGclid();
-    var gclidHash = getGclidHash();
+    var clickData = null;
+    var trackingRef = '';
+
+    // Usar nuevo sistema de tracking si está habilitado
+    if (widgetConfig.enableTracking !== false) {
+      var maxAge = widgetConfig.trackingMaxAgeDays || 90;
+      clickData = TrackingUtils.getBestClickId(maxAge);
+
+      if (clickData.id) {
+        var format = widgetConfig.trackingFormat || '[ref:{id}]';
+        trackingRef = format
+          .replace('{id}', clickData.id)
+          .replace('{type}', clickData.type)
+          .replace('{source}', clickData.source);
+      }
+    }
 
     var message = (widgetConfig.message || '¡Hola! 👋') +
                   ' 📄 ' + document.title;
 
-    if (gclidHash) {
-      message += ' 📋 Ref: #' + gclidHash;
+    if (trackingRef) {
+      message += ' ' + trackingRef;
     }
 
     message += ' 🔗 ' + getCurrentUrl();
@@ -160,8 +293,10 @@ export const generateWidgetCode = (user, selectedProject) => {
     }
 
     sendWebhook({
-      gclid: gclid || null,
-      gclid_hash: gclidHash || null,
+      click_id: clickData ? clickData.id : null,
+      click_id_type: clickData ? clickData.type : null,
+      click_id_source: clickData ? clickData.source : null,
+      click_id_age_days: clickData ? clickData.age : null,
       phone_e164: phone,
       agent_selected: agentName || 'default',
       first_click_time_iso: new Date().toISOString(),
@@ -177,8 +312,9 @@ export const generateWidgetCode = (user, selectedProject) => {
         event: 'whatsapp_lead_click',
         lead_platform: 'whatsapp',
         agent_name: agentName || 'default',
-        lead_traffic: gclid ? 'paid_google' : 'organic',
-        lead_ref: gclidHash || 'sin_ref'
+        lead_traffic: (clickData && clickData.id) ? 'paid_google' : 'organic',
+        lead_ref: trackingRef || 'sin_ref',
+        click_id_type: clickData ? clickData.type : null
       });
     }
   }

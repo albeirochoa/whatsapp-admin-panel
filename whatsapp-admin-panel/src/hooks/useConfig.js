@@ -9,7 +9,12 @@ export const useConfig = (user, selectedProject) => {
     webhookUrl: '',
     excludePages: '/checkout, /gracias',
     delayShow: 2000,
-    onlyMobile: false
+    onlyMobile: false,
+    // Tracking & Privacidad (valores por defecto)
+    enableTracking: true,
+    requireConsent: true,
+    trackingMaxAgeDays: 90,
+    trackingFormat: '[ref:{id}]'
   });
   const [publishing, setPublishing] = useState(false);
 
@@ -19,7 +24,11 @@ export const useConfig = (user, selectedProject) => {
     const configRef = doc(db, 'users', user.uid, 'projects', selectedProject.id);
     getDoc(configRef).then((docSnap) => {
       if (docSnap.exists() && docSnap.data().config) {
-        setConfig(docSnap.data().config);
+        // Mezclar configuración guardada con valores por defecto
+        setConfig(prevConfig => ({
+          ...prevConfig,
+          ...docSnap.data().config
+        }));
       }
     });
   }, [user, selectedProject]);
