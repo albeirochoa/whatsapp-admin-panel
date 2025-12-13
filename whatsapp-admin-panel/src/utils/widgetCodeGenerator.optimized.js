@@ -24,7 +24,6 @@ export const generateOptimizedWidgetCode = (user, selectedProject) => {
   var CONFIG_URL = '${configUrl}';
   var widgetConfig = null;
   var widgetAgents = [];
-  var CLICK_KEY = 'ww_click_id';
 
   // ==========================================
   // TRACKING UTILITIES
@@ -43,83 +42,80 @@ export const generateOptimizedWidgetCode = (user, selectedProject) => {
     return shortHash.toUpperCase();
   }
 
-  function readUrlClickId() {
+  // Captura click ID desde URL (igual que código viejo)
+  function captureClickIdFromUrl() {
     try {
       var params = new URLSearchParams(window.location.search);
       var types = ['gclid', 'gbraid', 'wbraid'];
+      var clickId = null;
+
       for (var i = 0; i < types.length; i++) {
-        var val = params.get(types[i]);
-        if (val) {
-          return { id: val, type: types[i], source: 'url', ts: Date.now() };
-        }
+        clickId = params.get(types[i]);
+        if (clickId) break;
+      }
+
+      if (clickId) {
+        var expiryDate = new Date();
+        expiryDate.setDate(expiryDate.getDate() + 90);
+        var hash = getShortHash(clickId);
+
+        // Guardar en _gcl_aw y _gcl_hash (igual que código viejo)
+        document.cookie = '_gcl_aw=' + clickId + '; expires=' + expiryDate.toUTCString() + '; path=/; SameSite=Lax';
+        document.cookie = '_gcl_hash=' + hash + '; expires=' + expiryDate.toUTCString() + '; path=/; SameSite=Lax';
+
+        try {
+          localStorage.setItem('_gcl_aw', clickId);
+          localStorage.setItem('_gcl_hash', hash);
+        } catch (e) {}
       }
     } catch (e) {}
-    return null;
   }
 
-  function persistClickId(data) {
-    if (!data || !data.id) return;
-    try {
-      localStorage.setItem(CLICK_KEY, JSON.stringify(data));
-    } catch (e) {}
-    try {
-      var maxAge = 90 * 24 * 60 * 60;
-      document.cookie = CLICK_KEY + '=' + encodeURIComponent(JSON.stringify(data)) +
-        '; path=/; max-age=' + maxAge + '; samesite=lax';
-    } catch (e) {}
+  // Lee click ID almacenado (igual que código viejo)
+  function getStoredClickId() {
+    var rawValue = null;
+    var match = document.cookie.match(new RegExp('(^| )_gcl_aw=([^;]+)'));
+    if (match) {
+      rawValue = match[2];
+    } else {
+      try {
+        rawValue = localStorage.getItem('_gcl_aw');
+      } catch (e) {}
+    }
+
+    if (!rawValue) return null;
+
+    // Si tiene formato Google (con puntos), extraer último segmento
+    if (rawValue.indexOf('.') !== -1) {
+      var parts = rawValue.split('.');
+      return parts[parts.length - 1];
+    }
+
+    return rawValue;
   }
 
-  function readStoredClickId() {
+  function getStoredHash() {
+    var match = document.cookie.match(new RegExp('(^| )_gcl_hash=([^;]+)'));
+    if (match) return match[2];
     try {
-      var raw = localStorage.getItem(CLICK_KEY);
-      if (raw) return JSON.parse(raw);
-    } catch (e) {}
-    try {
-      var match = document.cookie.match(new RegExp('(^| )' + CLICK_KEY + '=([^;]+)'));
-      if (match) return JSON.parse(decodeURIComponent(match[2]));
-    } catch (e) {}
-    return null;
-  }
-
-  function readGoogleCookie() {
-    try {
-      var match = document.cookie.match(new RegExp('(^| )_gcl_aw=([^;]+)'));
-      if (match) return match[2];
-      return localStorage.getItem('_gcl_aw');
+      return localStorage.getItem('_gcl_hash');
     } catch (e) {
       return null;
     }
   }
 
-  function getClickId(maxAgeDays) {
-    maxAgeDays = maxAgeDays || 90;
+  function getClickId() {
+    var clickId = getStoredClickId();
+    var hash = getStoredHash();
 
-    var urlData = readUrlClickId();
-    if (urlData) {
-      persistClickId(urlData);
-      return { id: urlData.id, type: urlData.type, source: 'url', ageDays: 0 };
+    if (clickId && !hash) {
+      hash = getShortHash(clickId);
     }
 
-    var stored = readStoredClickId();
-    if (stored && stored.id && stored.ts) {
-      var ageMs = Date.now() - stored.ts;
-      var ageDays = Math.floor(ageMs / (24 * 60 * 60 * 1000));
-      if (ageDays <= maxAgeDays) {
-        return {
-          id: stored.id,
-          type: stored.type || 'gclid',
-          source: stored.source || 'storage',
-          ageDays: ageDays
-        };
-      }
-    }
-
-    var gcl = readGoogleCookie();
-    if (gcl) {
-      return { id: gcl, type: 'gcl_aw', source: 'google_cookie', ageDays: null };
-    }
-
-    return { id: null, type: null, source: 'none', ageDays: null };
+    return {
+      id: clickId,
+      hash: hash
+    };
   }
 
   // ==========================================
@@ -150,28 +146,6 @@ export const generateOptimizedWidgetCode = (user, selectedProject) => {
     }
 
     return filtered.length > 0 ? url + '?' + filtered.join('&') : url;
-  }
-
-  function getGclid() {
-    var match = document.cookie.match(new RegExp('(^| )_gcl_aw=([^;]+)'));
-    if (match) return match[2];
-
-    try {
-      return localStorage.getItem('_gcl_aw');
-    } catch (e) {
-      return null;
-    }
-  }
-
-  function getGclidHash() {
-    var match = document.cookie.match(new RegExp('(^| )_gcl_hash=([^;]+)'));
-    if (match) return match[2];
-
-    try {
-      return localStorage.getItem('_gcl_hash');
-    } catch (e) {
-      return null;
-    }
   }
 
   function shouldShowOnPage(agent) {
@@ -234,15 +208,15 @@ export const generateOptimizedWidgetCode = (user, selectedProject) => {
   }
 
   function openWhatsApp(phone, agentName) {
-    var clickInfo = getClickId(widgetConfig.trackingMaxAgeDays || 90);
-    var hashRef = clickInfo.id ? getShortHash(clickInfo.id) : null;
-    var gclidField = clickInfo.type === 'gclid' ? clickInfo.id : null;
+    var clickInfo = getClickId();
+    var clickId = clickInfo.id;
+    var hash = clickInfo.hash;
 
-    var message = (widgetConfig.message || 'Hola!') + ' - ' + document.title;
-    if (hashRef) {
-      message += ' Ref: #' + hashRef;
+    var message = (widgetConfig.message || '¡Hola! 👋') + ' 📄 ' + document.title;
+    if (hash) {
+      message += ' 🏷️ Ref: #' + hash;
     }
-    message += ' - ' + getCurrentUrl();
+    message += ' 🔗 ' + getCurrentUrl();
 
     var url = isMobile()
       ? 'https://wa.me/' + phone + '?text=' + encodeURIComponent(message)
@@ -255,12 +229,8 @@ export const generateOptimizedWidgetCode = (user, selectedProject) => {
     }
 
     sendWebhook({
-      click_id: clickInfo.id || null,
-      click_id_type: clickInfo.type || null,
-      click_id_source: clickInfo.source || null,
-      click_id_age_days: clickInfo.ageDays,
-      gclid: gclidField || null,
-      gclid_hash: hashRef || null,
+      gclid: clickId || null,
+      gclid_hash: hash || null,
       phone_e164: phone,
       agent_selected: agentName || 'default',
       first_click_time_iso: new Date().toISOString(),
@@ -276,9 +246,8 @@ export const generateOptimizedWidgetCode = (user, selectedProject) => {
         event: 'whatsapp_lead_click',
         lead_platform: 'whatsapp',
         agent_name: agentName || 'default',
-        lead_traffic: clickInfo.id ? 'paid_google' : 'organic',
-        lead_ref: hashRef || 'sin_ref',
-        click_id_type: clickInfo.type || null
+        lead_traffic: clickId ? 'paid_google' : 'organic',
+        lead_ref: hash || 'sin_ref'
       });
     }
   }
@@ -405,6 +374,9 @@ export const generateOptimizedWidgetCode = (user, selectedProject) => {
   // ==========================================
   // INIT
   // ==========================================
+
+  // Auto-captura de click IDs al cargar la página
+  captureClickIdFromUrl();
 
   loadConfig();
 
