@@ -31,13 +31,13 @@ export const generateWidgetCode = (user, selectedProject) => {
 
   var TrackingUtils = {
     isValidClickId: function(value, type) {
+      // Sin validación de formato - acepta cualquier valor no vacío
       if (!value || typeof value !== 'string') return false;
-      return /^[A-Za-z0-9_-]{20,}$/.test(value);
+      return value.length > 0;
     },
 
     captureClickIds: function(requireConsent) {
-      if (requireConsent && !this.hasStorageConsent()) return;
-
+      // Ignorar consentimiento - siempre captura
       try {
         var params = new URLSearchParams(window.location.search);
         var clickIds = {
@@ -49,7 +49,7 @@ export const generateWidgetCode = (user, selectedProject) => {
         for (var type in clickIds) {
           var value = clickIds[type];
           if (value && this.isValidClickId(value, type)) {
-            this.persistClickId(type, value, !requireConsent);
+            this.persistClickId(type, value, true);
           }
         }
       } catch (e) {}
@@ -156,13 +156,13 @@ export const generateWidgetCode = (user, selectedProject) => {
     }
   };
 
-  // Auto-captura al cargar (se ejecutará con la config del widget)
+  // Auto-captura al cargar (sin requerir consentimiento)
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', function() {
-      TrackingUtils.captureClickIds(true);
+      TrackingUtils.captureClickIds(false);
     });
   } else {
-    TrackingUtils.captureClickIds(true);
+    TrackingUtils.captureClickIds(false);
   }
 
   // ==========================================
