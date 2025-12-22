@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { doc, getDoc, setDoc, collection, getDocs } from 'firebase/firestore';
 import { db } from '../firebase';
 import { publishWidgetConfig } from '../utils/staticJsonPublisher';
+import { syncClientConfig } from '../utils/syncClient';
 
 export const useConfig = (user, selectedProject) => {
   const [config, setConfig] = useState({
@@ -92,10 +93,18 @@ export const useConfig = (user, selectedProject) => {
       setPublishing(false);
 
       if (result.success) {
+        const syncResult = await syncClientConfig({
+          projectId: selectedProject.id,
+          projectName: selectedProject.name,
+          config,
+          agents
+        });
+
         return {
           success: true,
-          message: `✅ Widget publicado con ${agents.length} agente(s)`,
-          publicUrl: result.publicUrl
+          message: `✅ Widget publicado con ${agents.length} agente(s)` + (syncResult.success ? ' y sync n8n OK' : ' (sync n8n pendiente)'),
+          publicUrl: result.publicUrl,
+          sync: syncResult
         };
       } else {
         return {
