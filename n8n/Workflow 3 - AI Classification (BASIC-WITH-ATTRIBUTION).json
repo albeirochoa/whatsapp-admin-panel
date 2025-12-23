@@ -227,6 +227,7 @@
         -19520,
         -4240
       ],
+      "alwaysOutputData": true,
       "credentials": {
         "postgres": {
           "id": "8YJV6aXkwW8GDwrM",
