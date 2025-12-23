@@ -177,7 +177,8 @@
           "name": "OpenAi_Leadsignal"
         }
       },
-      "continueOnFail": true
+      "continueOnFail": true,
+      "alwaysOutputData": true
     },
     {
       "parameters": {
