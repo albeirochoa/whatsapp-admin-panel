@@ -375,7 +375,7 @@
         "sheetName": {
           "__rl": true,
           "value": "={{ $json.sheet_name }}",
-          "mode": "name"
+          "mode": "list"
         },
         "columns": {
           "mappingMode": "defineBelow",
