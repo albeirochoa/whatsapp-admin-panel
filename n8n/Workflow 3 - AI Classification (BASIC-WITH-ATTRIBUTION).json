@@ -372,11 +372,7 @@
           "value": "={{ $json.sheet_spreadsheet_id }}",
           "mode": "id"
         },
-        "sheetName": {
-          "__rl": true,
-          "value": "={{ $json.sheet_name }}",
-          "mode": "list"
-        },
+        "sheetName": "={{ $json.sheet_name }}",
         "columns": {
           "mappingMode": "defineBelow",
           "value": {
