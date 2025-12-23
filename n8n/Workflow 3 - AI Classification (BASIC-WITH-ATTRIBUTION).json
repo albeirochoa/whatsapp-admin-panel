@@ -104,9 +104,9 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "SELECT\n  event_id as click_event_id,\n  click_id,\n  click_id_type,\n  click_id_hash,\n  ts as click_ts,\n  landing_url\nFROM events\nWHERE project_id = $1\n  AND (\n    (click_id_hash = $4 AND click_id_hash IS NOT NULL)\n    OR phone_e164 = $2\n  )\n  AND event_type = 'click'\n  AND ts < $3\n  AND ts >= NOW() - INTERVAL '7 days'\nORDER BY \n  CASE WHEN click_id_hash = $4 THEN 0 ELSE 1 END,\n  ts DESC\nLIMIT 1;",
+        "query": "SELECT\n  event_id as click_event_id,\n  click_id,\n  click_id_type,\n  click_id_hash,\n  ts as click_ts,\n  landing_url\nFROM events\nWHERE project_id = $1\n  AND (\n    (click_id_hash = $4 AND click_id_hash IS NOT NULL)\n    OR phone_e164 = $2\n  )\n  AND event_type = 'click'\n  AND ts < $3\n  AND ts >= NOW() - ($5 || ' days')::interval\nORDER BY \n  CASE WHEN click_id_hash = $4 THEN 0 ELSE 1 END,\n  ts DESC\nLIMIT 1;",
         "options": {
-          "queryReplacement": "={{ [$json.project_id, $json.phone_e164, $json.first_message_ts, $json.click_id_hash] }}"
+          "queryReplacement": "={{ [$json.project_id, $json.phone_e164, $json.first_message_ts, $json.click_id_hash, $json.config.click_matching_window_days] }}"
         }
       },
       "type": "n8n-nodes-base.postgres",
@@ -239,8 +239,8 @@
       "parameters": {
         "modelId": {
           "__rl": true,
-          "value": "gpt-4o-mini",
-          "mode": "list",
+          "value": "={{ $json.config.openai_model }}",
+          "mode": "id",
           "cachedResultName": "GPT-4O-MINI"
         },
         "messages": {
@@ -255,8 +255,8 @@
           ]
         },
         "options": {
-          "maxTokens": 150,
-          "temperature": 0.3
+          "maxTokens": "={{ $json.config.openai_max_tokens }}",
+          "temperature": "={{ $json.config.openai_temperature }}"
         }
       },
       "type": "@n8n/n8n-nodes-langchain.openAi",
@@ -621,6 +621,11 @@
             "node": "Upsert Attribution",
             "type": "main",
             "index": 0
+          },
+          {
+            "node": "Classify with OpenAI",
+            "type": "main",
+            "index": 0
           }
         ],
         [
@@ -634,13 +639,7 @@
     },
     "Upsert Attribution": {
       "main": [
-        [
-          {
-            "node": "Classify with OpenAI",
-            "type": "main",
-            "index": 0
-          }
-        ]
+        []
       ]
     },
     "Classify with OpenAI": {
