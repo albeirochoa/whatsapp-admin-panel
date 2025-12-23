@@ -366,7 +366,7 @@
     },
     {
       "parameters": {
-        "operation": "upsert",
+        "operation": "appendOrUpdate",
         "documentId": {
           "__rl": true,
           "value": "={{ $json.sheet_spreadsheet_id }}",
