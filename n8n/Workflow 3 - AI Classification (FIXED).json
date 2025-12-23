@@ -622,7 +622,7 @@
     },
     {
       "parameters": {
-        "mode": "append",
+        "mode": "mergeByIndex",
         "options": {}
       },
       "type": "n8n-nodes-base.merge",
