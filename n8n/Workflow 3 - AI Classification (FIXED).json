@@ -623,20 +623,6 @@
     },
     {
       "parameters": {
-        "mode": "mergeByIndex",
-        "options": {}
-      },
-      "type": "n8n-nodes-base.merge",
-      "typeVersion": 2.1,
-      "position": [
-        -38128,
-        -8112
-      ],
-      "id": "3d7b189d-cbc0-43c9-9c75-91a7da5f7733",
-      "name": "Merge OpenAI + Convo"
-    },
-    {
-      "parameters": {
         "conditions": {
           "combinator": "and",
           "conditions": [
@@ -796,7 +782,7 @@
       "main": [
         [
           {
-            "node": "Merge OpenAI + Convo",
+            "node": "Parse AI Response",
             "type": "main",
             "index": 0
           }
@@ -928,11 +914,6 @@
             "node": "Classify with OpenAI",
             "type": "main",
             "index": 0
-          },
-          {
-            "node": "Merge OpenAI + Convo",
-            "type": "main",
-            "index": 1
           }
         ]
       ]
@@ -947,17 +928,6 @@
           },
           {
             "node": "Prepare for Sheets",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Merge OpenAI + Convo": {
-      "main": [
-        [
-          {
-            "node": "Parse AI Response",
             "type": "main",
             "index": 0
           }
