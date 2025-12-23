@@ -497,7 +497,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "SELECT \n  c.click_id,\n  c.conversion_name,\n  TO_CHAR(c.conversion_time AT TIME ZONE 'America/Bogota', 'YYYY-MM-DD HH24:MI:SS-05:00') as conversion_time,\n  c.conversion_value,\n  c.conversion_currency,\n  c.phone_e164,\n  c.ai_reason,\n  ROUND(c.ai_confidence::numeric, 2) as ai_confidence,\n  c.external_attrib_id,\n  p.sheet_spreadsheet_id,\n  p.sheet_conversions_name as sheet_name\nFROM conversions c\nJOIN projects p ON c.project_id = p.project_id\nWHERE c.conversion_id = ANY(\n  SELECT conversion_id \n  FROM conversions \n  WHERE updated_at >= NOW() - INTERVAL '5 minutes'\n  ORDER BY updated_at DESC\n  LIMIT 100\n);",
+        "query": "SELECT \n  c.click_id,\n  c.conversion_name,\n  TO_CHAR(c.conversion_time AT TIME ZONE 'America/Bogota', 'YYYY-MM-DD HH24:MI:SS-05:00') as conversion_time,\n  c.conversion_value,\n  c.conversion_currency,\n  c.phone_e164,\n  c.ai_reason,\n  ROUND(c.ai_confidence::numeric, 2) as ai_confidence,\n  c.external_attrib_id,\n  p.sheet_spreadsheet_id,\n  p.sheet_conversions_name as sheet_name\nFROM conversions c\nJOIN clients_config p ON c.project_id = p.project_id\nWHERE c.conversion_id = ANY(\n  SELECT conversion_id \n  FROM conversions \n  WHERE updated_at >= NOW() - INTERVAL '5 minutes'\n  ORDER BY updated_at DESC\n  LIMIT 100\n);",
         "options": {}
       },
       "type": "n8n-nodes-base.postgres",
