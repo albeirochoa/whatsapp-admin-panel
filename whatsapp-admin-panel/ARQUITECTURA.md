@@ -592,44 +592,58 @@ Sistema de conversión tracking que captura clicks del widget Firebase, mensajes
                           │
                           │ Cron cada 5 minutos
                           ▼
-### Workflow 3: AI Classification & Attribution
+### Workflow 3: AI Classification & Attribution (BASIC-WITH-ATTRIBUTION)
 
 Este workflow procesa el histórico de mensajes para clasificar la intención del usuario y atribuir la conversión a un clic publicitario.
 
+**Versión actual:** `Workflow 3 - AI Classification (BASIC-WITH-ATTRIBUTION).json`
+**Trigger:** Cron cada 5 minutos
+**Arquitectura:** Flujo lineal simple con bifurcaciones para atribución
+
 ```mermaid
 graph TD
-    A[1. Get Pending Events] --> B[2. Group by Phone]
-    B --> C[3. Get Client Config]
-    C --> D[4. Lookup Lead Attribution]
-    D --> E[5. Merge Attribution]
-    E --> F{Has Message Hash?}
-    F -- Yes --> G[6. Upsert lead_attribution]
-    F -- No --> H[7. Find Click in events]
-    G --> H
-    H --> I[8. Merge Click Data]
-    I --> J[9. Lookup Cached Conversion]
-    J --> K[10. Cache Gate]
-    K --> L{Cache Hit?}
-    
-    L -- Yes --> M[11. Use Cached Result]
-    L -- No --> N[12. Classify with OpenAI]
-    
-    N --> O[13. Parse AI Response]
-    M --> P[14. Prepare Data & SHA-256]
-    O --> P
-    
-    P --> Q[15. Save Conversion - DO NOTHING]
-    Q --> R[16. Mark events as Processed]
-    R --> S[17. Append to Google Sheets]
+    A[Every 5 Minutes] --> B[Get Pending Messages]
+    B --> C{Has Messages?}
+    C -->|No| D[No Messages - Stop]
+    C -->|Yes| E[Group by Phone]
+    E --> F[Process Conversation]
+    F --> G[Find Click]
+    G --> H[Merge Click Data]
+    H --> I[Lookup Attribution]
+    I --> J[Merge Attribution]
+    J --> K{Has Click Hash?}
+    K -->|Yes| L[Upsert Attribution]
+    K -->|Yes| M[Classify with OpenAI]
+    K -->|No| M
+    L -.guarda en lead_attribution.-> M
+    M --> N[Parse AI Response]
+    N --> O[Save Conversion]
+    O --> P[Prepare Update]
+    P --> Q[Mark as Processed]
+    Q --> R[Prepare for Sheets]
+    R --> S[Append to Sheets]
 ```
 
-**Lógica de Atribución:**
-1. **Mensaje**: Si el usuario envía un hash (ej. desde un botón de anuncio).
-2. **Persistente**: Si no hay hash, busca en `lead_attribution` (hereda clics anteriores del mismo teléfono).
-3. **Histórico**: Busca clics en la tabla `events` dentro de una ventana de 7 días previa al primer mensaje.
+**Lógica de Atribución (3 capas):**
+1. **Hash en mensaje**: Si el usuario envía `#ABCDE` en el texto (desde botón de anuncio).
+2. **Atribución persistente**: Si no hay hash en mensaje, busca en `lead_attribution` (hereda clics anteriores del mismo teléfono).
+3. **Búsqueda histórica**: Busca clics en `events` por `click_id_hash` dentro de ventana configurable (`click_matching_window_days`).
 
-**Lógica de Deduplicación:**
-Utiliza un `external_attrib_id` compuesto por `project_id + phone + conversion_name`. Esto permite que un usuario sea `lead_qualified` y luego `sale_confirmed` sin duplicar la misma etapa.
+**Lógica de Deduplicación (Opción A - Múltiples Conversiones):**
+Utiliza `external_attrib_id` compuesto por `conv-{project_id}-{phone_e164}-{conversion_name}`.
+
+**Comportamiento:**
+- ✅ Permite que un teléfono tenga **3 conversiones** (una por cada tipo: `clic_boton_wa`, `chat_iniciado_wa`, `venta_confirmada_wa`)
+- ✅ Previene duplicados del **mismo tipo** (no permite dos `chat_iniciado_wa` para el mismo teléfono)
+- ✅ Google Ads recibe **3 eventos** separados para optimizar por cada etapa del funnel
+
+**Ejemplo:**
+```
+Teléfono: +573001000001
+├─ Conversión 1: conv-color-tapetes-+573001000001-clic_boton_wa (value: 0)
+├─ Conversión 2: conv-color-tapetes-+573001000001-chat_iniciado_wa (value: 15000)
+└─ Conversión 3: conv-color-tapetes-+573001000001-venta_confirmada_wa (value: 85000)
+```
 
 ```
 
@@ -744,98 +758,513 @@ Utiliza un `external_attrib_id` compuesto por `project_id + phone + conversion_n
 - Inserta en `events` (`event_type='message_in/out'`) con `click_id_hash`, `provider_event_type`; Sheets `chats_raw` como backup.
 - Responde JSON con `success` y `event_id`.
 
-**Workflow 3: AI Classification** ✅
+**Workflow 3: AI Classification (BASIC-WITH-ATTRIBUTION)** ✅
 
 **Trigger:** Cron cada 5 minutos
+**Total nodos:** 15
+**Arquitectura:** Flujo lineal simple (BASIC) + attribution persistence
 
-**Flujo completo:**
+---
 
-1. **Get Pending Messages** - Query balanceada con CTE:
-   - `ROW_NUMBER() OVER (PARTITION BY project_id, phone_e164 ORDER BY ts)` con `rn <= 50`
-   - `LIMIT 500` total para evitar sobrecarga
-   - Extrae `lead_email` y `lead_name` desde `payload_raw->>'extracted_email'/'extracted_name'`
-   - Trae configuración completa: `prompt_template`, `conversion_config`, `openai_model`, `message_limit_per_conversation`, etc.
+#### **Flujo Detallado Nodo por Nodo:**
 
-2. **Has Messages?** - Valida que haya items para procesar
+##### **1. Every 5 Minutes** (Schedule Trigger)
+- **Tipo:** `n8n-nodes-base.scheduleTrigger`
+- **Función:** Dispara el workflow automáticamente cada 5 minutos
+- **Configuración:** `interval: 5 minutes`
 
-3. **Group by Phone** - Consolida mensajes por `project_id:phone_e164`:
-   - Parsea `conversion_config` (maneja string/JSON con defaults)
-   - Agrupa mensajes con `click_id_hash`, `lead_email`, `lead_name` por mensaje
-   - Acumula `event_ids` para marcar como procesados
+##### **2. Get Pending Messages** (Postgres Query)
+- **Tipo:** `n8n-nodes-base.postgres`
+- **Función:** Obtiene eventos pendientes de procesamiento
+- **Query SQL:**
+  ```sql
+  SELECT
+    e.event_id, e.project_id, e.phone_e164, e.ts,
+    e.message_text, e.direction,
+    c.client_name, c.prompt_template, c.conversion_config,
+    c.openai_model, c.openai_temperature, c.openai_max_tokens,
+    c.click_matching_window_days,
+    c.sheet_spreadsheet_id, c.sheet_conversions_name
+  FROM events e
+  INNER JOIN clients_config c ON e.project_id = c.project_id
+  WHERE e.event_type IN ('message_in', 'message_out')
+    AND e.processed_at IS NULL
+    AND c.status = 'active'
+  ORDER BY e.project_id, e.phone_e164, e.ts ASC
+  LIMIT 500;
+  ```
+- **Salida:** Array de eventos con configuración del cliente
+- **Notas:**
+  - Límite de 500 eventos por ejecución para evitar sobrecarga
+  - Solo procesa clientes activos
+  - Incluye configuración completa en cada fila
 
-4. **Process Conversation** - Prepara conversación para IA:
-   - Ordena mensajes por timestamp
-   - Usa solo últimos N mensajes (`message_limit_per_conversation` con cap duro de 30)
-   - Formatea como "CLIENTE: texto" / "AGENTE: texto"
-   - Extrae `click_id_hash`/`lead_email`/`lead_name` del primer mensaje inbound
-   - Rate limiting: 500ms delay entre items
+##### **3. Has Messages?** (IF node)
+- **Tipo:** `n8n-nodes-base.if`
+- **Función:** Valida que haya mensajes para procesar
+- **Condición:** `$input.all().length > 0`
+- **Salidas:**
+  - **TRUE**: Continúa a "Group by Phone"
+  - **FALSE**: Va a "No Messages" (termina workflow)
 
-5. **Lookup Attribution** - Busca atribución persistida:
-   - Query: `SELECT click_id_hash FROM lead_attribution WHERE project_id=$1 AND phone_e164=$2 AND expires_at > NOW()`
-   - `alwaysOutputData: true` para no romper flujo si no existe
+##### **4. Group by Phone** (Code node)
+- **Tipo:** `n8n-nodes-base.code`
+- **Modo:** `runOnceForAllItems` (procesa todo el batch)
+- **Función:** Agrupa mensajes por `project_id:phone_e164`
+- **Lógica:**
+  ```javascript
+  const groups = {};
+  for (const item of items) {
+    const key = `${item.json.project_id}:${item.json.phone_e164}`;
+    if (!groups[key]) {
+      groups[key] = {
+        project_id: item.json.project_id,
+        phone_e164: item.json.phone_e164,
+        config: { /* parsea conversion_config */ },
+        messages: [],
+        event_ids: []
+      };
+    }
+    groups[key].messages.push({
+      ts: item.json.ts,
+      text: item.json.message_text || '',
+      direction: item.json.direction,
+      click_id_hash: item.json.click_id_hash || null
+    });
+    groups[key].event_ids.push(item.json.event_id);
+  }
+  return Object.values(groups);
+  ```
+- **Salida:** Array de grupos (1 grupo = 1 conversación completa por teléfono)
+- **Manejo de `conversion_config`:**
+  - Si viene como string JSON → `JSON.parse()`
+  - Si falla → usa defaults:
+    ```json
+    {
+      "1": {"name": "no_qualified", "value": 0, "currency": "COP"},
+      "2": {"name": "lead_qualified", "value": 15000, "currency": "COP"},
+      "3": {"name": "sale_confirmed", "value": 85000, "currency": "COP"}
+    }
+    ```
 
-6. **Merge Attribution** - Combina hash del mensaje con hash almacenado:
-   - Usa patrón híbrido de recuperación (pairing + ID matching + index fallback)
-   - Si mensaje tiene hash → `click_id_hash_source = 'message'`
-   - Si no, pero existe en DB → `click_id_hash_source = 'stored'`
-   - Si ninguno → `click_id_hash = null`
+##### **5. Process Conversation** (Code node)
+- **Tipo:** `n8n-nodes-base.code`
+- **Modo:** `runOnceForEachItem`
+- **Función:** Construye la conversación formateada para OpenAI
+- **Lógica:**
+  ```javascript
+  const group = $input.item.json;
+  const messages = group.messages;
 
-7. **Has Click Hash?** - Bifurcación según origen del hash:
-   - **True** (source='message'): Va a **Upsert Attribution** + **Find Click**
-   - **False** (source='stored' o null): Va solo a **Find Click**
+  // Ordenar por timestamp
+  const sortedMessages = [...messages].sort((a, b) =>
+    new Date(a.ts) - new Date(b.ts)
+  );
 
-8. **Upsert Attribution** - Persiste atribución en `lead_attribution`:
-   - `ON CONFLICT (project_id, phone_e164) DO UPDATE`
-   - Actualiza `click_id_hash`, `last_message_ts`, `expires_at`
-   - `expires_at = NOW() + click_matching_window_days`
+  // Formatear conversación
+  const conversation = sortedMessages
+    .map(m => {
+      const direction = m.direction === 'in' ? 'CLIENTE' : 'AGENTE';
+      const text = m.text && m.text.trim() ? m.text : '[Multimedia/Sin texto]';
+      return `${direction}: ${text}`;
+    })
+    .join('\n');
 
-9. **Find Click** - Busca click event en `events`:
-    - Query: `WHERE project_id=$1 AND click_id_hash=$2 AND event_type='click' AND ts < first_message_ts AND ts >= NOW() - ($5 || ' days')::interval` (usa `click_matching_window_days` por cliente)
-   - `alwaysOutputData: true`
+  // Extraer click_id_hash del primer mensaje inbound
+  const firstInboundMsg = sortedMessages.find(m => m.direction === 'in');
+  const click_id_hash = firstInboundMsg?.click_id_hash || null;
 
-10. **Merge Click Data** - Combina conversación + click:
-    - Usa patrón híbrido: intenta pairing directo, luego búsqueda por ID, finalmente fallback por índice
-    - Solución a item pairing roto por nodos Postgres
+  // Rate limiting: 500ms delay
+  await new Promise(resolve => setTimeout(resolve, 500));
 
-11. **Lookup Cached Conversion** - Busca clasificación previa:
-    - Query: `WHERE project_id=$1 AND phone_e164=$2 AND last_message_ts=$3 AND message_count=$4`
-    - Si existe → reutiliza `ai_label`, `ai_confidence`, `ai_reason` (evita llamada OpenAI)
+  return {
+    project_id: group.project_id,
+    phone_e164: group.phone_e164,
+    config: group.config,
+    event_ids: group.event_ids,
+    aggregated_conversation: conversation,
+    message_count: messages.length,
+    first_message_ts: sortedMessages[0].ts,
+    last_message_ts: sortedMessages[sortedMessages.length - 1].ts,
+    click_id_hash,
+    click_data: null,
+    has_click: false
+  };
+  ```
+- **Salida:** Objeto con conversación agregada + metadata
+- **Rate limiting:** 500ms entre items para evitar 429 de OpenAI
 
-12. **Cache Gate** - Merge cache result con conversación:
-    - Usa patrón híbrido de recuperación de datos (pairing + ID matching + index fallback)
+##### **6. Find Click** (Postgres Query)
+- **Tipo:** `n8n-nodes-base.postgres`
+- **Función:** Busca evento de click por `click_id_hash`
+- **Query SQL:**
+  ```sql
+  SELECT
+    event_id AS click_event_id,
+    click_id,
+    click_id_type,
+    click_id_hash,
+    landing_url
+  FROM events
+  WHERE project_id = $1
+    AND click_id_hash = $2
+    AND event_type = 'click'
+    AND ts < $3
+    AND ts >= NOW() - ($4 || ' days')::interval
+  ORDER BY ts DESC
+  LIMIT 1;
+  ```
+- **Parámetros:**
+  - `$1`: `project_id`
+  - `$2`: `click_id_hash`
+  - `$3`: `first_message_ts`
+  - `$4`: `click_matching_window_days`
+- **Configuración:** `alwaysOutputData: true` (no rompe flujo si no encuentra click)
+- **Salida:** Click data o null
 
-13. **Cache Hit?** - Bifurcación según cache:
-    - **True**: Va a **Use Cached Result** (skip OpenAI)
-    - **False**: Va a **Classify with OpenAI**
+##### **7. Merge Click Data** (Code node)
+- **Tipo:** `n8n-nodes-base.code`
+- **Modo:** `runOnceForEachItem`
+- **Función:** Combina conversación + datos de click
+- **Lógica (patrón híbrido):**
+  ```javascript
+  const clickResult = $input.item.json;
+  const allConvos = $('Process Conversation').all();
 
-14. **Classify with OpenAI** (solo si no hay cache):
-    - Modelo: `gpt-4o-mini` (configurable por cliente)
-    - Prompt: `prompt_template` + conversación formateada
-    - Response: `{label: 1|2|3, confidence: 0-1, reason: "..."}`
+  // 1. Intentar pairing directo
+  let convo;
+  try { convo = $('Process Conversation').json; } catch(e) {}
 
-15. **Parse AI Response** / **Use Cached Result** - Genera objeto de conversión:
-    - **Recuperación de datos post-AI**: `Merge OpenAI + Convo` combina por posición la respuesta de OpenAI con la conversación; si llega error de OpenAI se enruta a la rama de retry (`Has Error?` → `Update Retry Count`).
-    - Aplica `conversion_config[label]` para obtener `conversion_name`, `conversion_value`, `currency`
-    - Genera `conversion_id` único temporal
-    - **`external_attrib_id`**: `conv-{project_id}-{phone_e164}-{conversion_name}` (único por teléfono + tipo de conversión)
-    - Calcula `email_sha256` y `phone_sha256` (SHA-256 implementado en JS)
-    - Define `attribution_method`: `click_id_hash_match` / `click_id_match` / `organic`
+  // 2. Si falla, buscar por ID
+  if (!convo || convo.phone_e164 !== clickResult.phone_e164) {
+    convo = allConvos.find(c =>
+      c.json.project_id === clickResult.project_id &&
+      c.json.phone_e164 === clickResult.phone_e164
+    )?.json || allConvos[$input.itemIndex]?.json;
+  }
 
-16. **Save Conversion** - INSERT con deduplicación y evolución:
-    - `ON CONFLICT (external_attrib_id) DO UPDATE SET ... WHERE conversions.ai_label < EXCLUDED.ai_label`
-    - **external_attrib_id**: `conv-{project_id}-{phone_e164}` (SIN ai_label para evitar duplicados)
-    - **Comportamiento**: Cada teléfono tiene UNA sola conversión que evoluciona de label 1 → 2 → 3
-    - **Ejemplo**: `+573001000001` comienza como `no_qualified` (label 1), luego se actualiza a `lead_qualified` (label 2), finalmente a `sale_confirmed` (label 3)
-    - **Bloqueo de retroceso**: Solo actualiza si `ai_label < EXCLUDED.ai_label` (no permite 3→1)
-    - Incluye: `lead_email`, `lead_name`, `email_sha256`, `phone_sha256`
-    - Trunca `aggregated_conversation` a 5000 chars
-    - **Fix implementado (2025-12-22)**: Ver [FIX-DUPLICACION-CONVERSIONES.md](../../docs/FIX-DUPLICACION-CONVERSIONES.md)
+  return {
+    ...convo,
+    click_data: clickResult.click_event_id ? {
+      click_event_id: clickResult.click_event_id,
+      click_id: clickResult.click_id,
+      click_id_type: clickResult.click_id_type,
+      landing_url: clickResult.landing_url
+    } : null,
+    has_click: !!clickResult.click_event_id
+  };
+  ```
+- **Salida:** Objeto combinado con todos los datos
 
-17. **Prepare Update** + **Mark as Processed**:
-    - `UPDATE events SET processed_at=NOW() WHERE event_id = ANY($1::text[])`
+##### **8. Lookup Attribution** (Postgres Query)
+- **Tipo:** `n8n-nodes-base.postgres`
+- **Función:** Busca atribución persistida en `lead_attribution`
+- **Query SQL:**
+  ```sql
+  SELECT
+    $1::text AS project_id,
+    $2::text AS phone_e164,
+    (SELECT click_id_hash FROM lead_attribution
+     WHERE project_id = $1 AND phone_e164 = $2
+     AND expires_at > NOW()
+     ORDER BY updated_at DESC LIMIT 1) AS stored_click_id_hash,
+    (SELECT expires_at FROM lead_attribution
+     WHERE project_id = $1 AND phone_e164 = $2
+     AND expires_at > NOW()
+     ORDER BY updated_at DESC LIMIT 1) AS stored_expires_at;
+  ```
+- **Configuración:** `alwaysOutputData: true`
+- **Salida:** `stored_click_id_hash` o null
 
-18. **Prepare for Sheets** + **Append to Sheets**:
-    - Columnas: `click_id`, `conversion_name`, `conversion_time`, `conversion_value`, `conversion_currency`, `phone_e164`, `ai_reason`, `ai_confidence`, `external_attrib_id`, `label_text`, `lead_name`, `email_sha256`, `phone_sha256`
+##### **9. Merge Attribution** (Code node)
+- **Tipo:** `n8n-nodes-base.code`
+- **Modo:** `runOnceForEachItem`
+- **Función:** Combina hash del mensaje con hash almacenado
+- **Lógica de prioridad:**
+  ```javascript
+  const lookup = $input.item.json;
+  const allConvos = $('Process Conversation').all();
+
+  // Recuperar conversación (patrón híbrido)
+  let convo;
+  try { convo = $('Process Conversation').json; } catch(e) {}
+  if (!convo || convo.phone_e164 !== lookup.phone_e164) {
+    convo = allConvos.find(c =>
+      c.json.project_id === lookup.project_id &&
+      c.json.phone_e164 === lookup.phone_e164
+    )?.json || allConvos[$input.itemIndex]?.json;
+  }
+
+  const storedClickIdHash = lookup.stored_click_id_hash || null;
+  let click_id_hash = convo.click_id_hash || null;
+  let click_id_hash_source = null;
+
+  // Prioridad: mensaje > almacenado > null
+  if (click_id_hash) {
+    click_id_hash_source = 'message';  // Hash viene del texto del mensaje
+  } else if (storedClickIdHash) {
+    click_id_hash = storedClickIdHash;
+    click_id_hash_source = 'stored';   // Hash viene de lead_attribution
+  }
+
+  return {
+    ...convo,
+    click_id_hash,
+    click_id_hash_source
+  };
+  ```
+- **Salida:** Conversación con `click_id_hash` + `click_id_hash_source`
+
+##### **10. Has Click Hash?** (IF node)
+- **Tipo:** `n8n-nodes-base.if`
+- **Función:** Bifurcación según presencia de `click_id_hash`
+- **Condición:** `{{ $json.click_id_hash }}` is not empty
+- **Salidas:**
+  - **TRUE**: Va a "Upsert Attribution" + "Classify with OpenAI" (en paralelo)
+  - **FALSE**: Va solo a "Classify with OpenAI"
+- **Nota importante:** Ambas salidas van a OpenAI, pero solo TRUE actualiza `lead_attribution`
+
+##### **11. Upsert Attribution** (Postgres Query)
+- **Tipo:** `n8n-nodes-base.postgres`
+- **Función:** Guarda/actualiza atribución en `lead_attribution`
+- **Query SQL:**
+  ```sql
+  INSERT INTO lead_attribution (
+    project_id, phone_e164, click_id_hash,
+    first_click_ts, last_message_ts, expires_at, updated_at
+  ) VALUES (
+    $1, $2, $3, $4, $5,
+    NOW() + ($6 || ' days')::interval,
+    NOW()
+  )
+  ON CONFLICT (project_id, phone_e164) DO UPDATE SET
+    click_id_hash = EXCLUDED.click_id_hash,
+    first_click_ts = LEAST(lead_attribution.first_click_ts, EXCLUDED.first_click_ts),
+    last_message_ts = EXCLUDED.last_message_ts,
+    expires_at = EXCLUDED.expires_at,
+    updated_at = NOW()
+  RETURNING project_id;
+  ```
+- **Parámetros:**
+  - `$1`: `project_id`
+  - `$2`: `phone_e164`
+  - `$3`: `click_id_hash`
+  - `$4`: `first_message_ts`
+  - `$5`: `last_message_ts`
+  - `$6`: `click_matching_window_days` (dinámico por cliente)
+- **Configuración:** `alwaysOutputData: true`
+- **Comportamiento:**
+  - Si no existe → INSERT nuevo registro
+  - Si existe → UPDATE con:
+    - `first_click_ts` = el más antiguo (LEAST)
+    - `last_message_ts` = el más reciente
+    - `expires_at` = NOW() + ventana de días
+- **Nota:** Este nodo NO envía output a ningún otro nodo (termina el flujo)
+
+##### **12. Classify with OpenAI** (OpenAI node)
+- **Tipo:** `@n8n/n8n-nodes-langchain.openAi`
+- **Función:** Clasifica la conversación usando GPT-4o-mini
+- **Modelo:** `gpt-4o-mini` (configurable por cliente en `config.openai_model`)
+- **Messages:**
+  - **System:** `{{ $json.config.prompt_template }}`
+  - **User:**
+    ```
+    Conversación de WhatsApp:
+
+    {{ $json.aggregated_conversation }}
+
+    Clasifica esta conversación según las reglas definidas. Responde SOLO con el JSON.
+    ```
+- **Options:**
+  - `maxTokens`: 150
+  - `temperature`: 0.3
+- **Expected response:**
+  ```json
+  {
+    "label": 1,  // 1, 2, o 3
+    "value": 0,  // valor de conversión
+    "confidence": 0.95,  // 0.0 - 1.0
+    "reason": "Breve explicación de por qué asignaste este label"
+  }
+  ```
+- **Entrada desde:** "Has Click Hash?" (ambas salidas TRUE y FALSE)
+- **Salida:** Respuesta de OpenAI con clasificación
+
+##### **13. Parse AI Response** (Code node)
+- **Tipo:** `n8n-nodes-base.code`
+- **Modo:** `runOnceForEachItem`
+- **Función:** Parsea respuesta de OpenAI + genera objeto de conversión
+- **Lógica completa:**
+  ```javascript
+  // Función SHA-256 implementada (no usa crypto module)
+  function sha256(ascii) {
+    // ... implementación completa SHA-256 ...
+    return result; // hash de 64 chars
+  }
+
+  const item = $input.item.json;
+  const convo_data = item;
+
+  // Extraer content de OpenAI
+  const content = item.message?.content || item.choices?.[0]?.message?.content || null;
+
+  // Limpiar y parsear respuesta
+  const cleanContent = content
+    .replace(/```json\\n?/g, '')
+    .replace(/```\\n?/g, '')
+    .trim();
+  const ai_result = JSON.parse(cleanContent);
+
+  // Aplicar defaults
+  if (typeof ai_result.label === 'undefined') ai_result.label = 1;
+  if (typeof ai_result.confidence === 'undefined') ai_result.confidence = 0.5;
+  if (!ai_result.reason) ai_result.reason = 'Clasificacion automatica';
+  if (![1, 2, 3].includes(ai_result.label)) ai_result.label = 1;
+
+  // Obtener conversion_config para este label
+  const conversion_config = convo_data.config.conversion_config[ai_result.label.toString()] ||
+    { name: 'unknown', value: 0, currency: 'COP' };
+
+  // Generar IDs
+  const conversion_id = `conv_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
+
+  // 🔑 CLAVE: external_attrib_id usa conversion_name
+  const external_attrib_id = `conv-${convo_data.project_id}-${convo_data.phone_e164}-${conversion_config.name}`;
+
+  // Calcular SHA-256 para Enhanced Conversions
+  const lead_email = (convo_data.lead_email || '').trim().toLowerCase() || null;
+  const email_sha256 = lead_email ? sha256(lead_email) : null;
+  const phone_sha256 = convo_data.phone_e164 ? sha256(convo_data.phone_e164) : null;
+
+  // Definir attribution_method
+  let attribution_method = 'organic';
+  if (convo_data.click_data && convo_data.click_data.click_id) {
+    attribution_method = convo_data.click_data.click_id_hash ?
+      'click_id_hash_match' : 'click_id_match';
+  }
+
+  return {
+    conversion_id,
+    project_id: convo_data.project_id,
+    phone_e164: convo_data.phone_e164,
+    click_event_id: convo_data.click_data?.click_event_id || null,
+    click_id: convo_data.click_data?.click_id || null,
+    click_id_type: convo_data.click_data?.click_id_type || null,
+    attribution_method,
+    ai_label: ai_result.label,
+    ai_confidence: ai_result.confidence,
+    ai_reason: ai_result.reason,
+    ai_model_used: convo_data.config.openai_model || 'gpt-4o-mini',
+    conversion_name: conversion_config.name,
+    conversion_value: conversion_config.value,
+    conversion_currency: conversion_config.currency || 'COP',
+    conversion_time: new Date().toISOString(),
+    external_attrib_id,
+    aggregated_conversation: convo_data.aggregated_conversation,
+    message_count: convo_data.message_count,
+    first_message_ts: convo_data.first_message_ts,
+    last_message_ts: convo_data.last_message_ts,
+    event_ids: convo_data.event_ids,
+    config: convo_data.config,
+    lead_email,
+    lead_name: (convo_data.lead_name && String(convo_data.lead_name).trim()) || null,
+    email_sha256,
+    phone_sha256
+  };
+  ```
+- **Salida:** Objeto completo de conversión listo para guardar
+
+##### **14. Save Conversion** (Postgres Query)
+- **Tipo:** `n8n-nodes-base.postgres`
+- **Función:** Inserta conversión con deduplicación por `external_attrib_id`
+- **Query SQL:**
+  ```sql
+  INSERT INTO conversions (
+    conversion_id, project_id, phone_e164, click_event_id,
+    click_id, click_id_type, attribution_method,
+    ai_label, ai_confidence, ai_reason, ai_model_used,
+    conversion_name, conversion_value, conversion_currency, conversion_time,
+    external_attrib_id,
+    aggregated_conversation, message_count, first_message_ts, last_message_ts,
+    status, created_at
+  ) VALUES (
+    $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,'pending',NOW()
+  )
+  ON CONFLICT (external_attrib_id) DO NOTHING
+  RETURNING conversion_id;
+  ```
+- **Parámetros:** 20 parámetros desde `$json.*`
+- **Deduplicación:**
+  - `ON CONFLICT (external_attrib_id) DO NOTHING`
+  - Si ya existe conversión con mismo `conv-{project}-{phone}-{conversion_name}` → **NO inserta**
+  - Previene duplicados del **mismo tipo** de conversión
+- **Configuración:** `alwaysOutputData: true`
+- **Ejemplo:**
+  ```
+  INSERT: conv-color-tapetes-+573001000001-chat_iniciado_wa → ✅ OK (primera vez)
+  INSERT: conv-color-tapetes-+573001000001-chat_iniciado_wa → ❌ SKIP (duplicado)
+  INSERT: conv-color-tapetes-+573001000001-venta_confirmada_wa → ✅ OK (diferente tipo)
+  ```
+
+##### **15. Prepare Update** + **16. Mark as Processed** (Code + Postgres)
+- **Prepare Update:**
+  - **Tipo:** `n8n-nodes-base.code`
+  - **Función:** Prepara array de event_ids
+  ```javascript
+  return {
+    event_ids_array: $json.event_ids,
+    count: $json.event_ids.length
+  };
+  ```
+- **Mark as Processed:**
+  - **Tipo:** `n8n-nodes-base.postgres`
+  - **Query SQL:**
+    ```sql
+    UPDATE events
+    SET processed_at = NOW()
+    WHERE event_id = ANY($1::text[])
+    RETURNING event_id;
+    ```
+  - **Configuración:** `alwaysOutputData: true`
+  - **Resultado:** Marca todos los eventos como procesados
+
+##### **17. Prepare for Sheets** + **18. Append to Sheets** (Code + Google Sheets)
+- **Prepare for Sheets:**
+  - **Tipo:** `n8n-nodes-base.code`
+  - **Función:** Filtra campos para Google Sheets
+  ```javascript
+  return {
+    click_id: $json.click_id || '',
+    conversion_name: $json.conversion_name,
+    conversion_time: $json.conversion_time,
+    conversion_value: $json.conversion_value,
+    conversion_currency: $json.conversion_currency,
+    phone_e164: $json.phone_e164,
+    ai_reason: $json.ai_reason,
+    ai_confidence: $json.ai_confidence,
+    external_attrib_id: $json.external_attrib_id
+  };
+  ```
+- **Append to Sheets:**
+  - **Tipo:** `n8n-nodes-base.googleSheets`
+  - **Operación:** Append Row
+  - **Spreadsheet ID:** `{{ $json.config.sheet_spreadsheet_id }}`
+  - **Sheet Name:** `{{ $json.config.sheet_conversions_name }}`
+  - **Columnas:** Las definidas en "Prepare for Sheets"
+
+---
+
+#### **Resumen de Optimizaciones:**
+
+- ✅ **Flujo lineal simple**: Basado en BASIC que funciona, sin complejidad innecesaria
+- ✅ **Attribution persistence**: 3 capas (mensaje → stored → histórico)
+- ✅ **Deduplicación por conversion_name**: Permite múltiples tipos de conversión
+- ✅ **Conexión paralela en Has Click Hash?**: Upsert Attribution + OpenAI simultáneos
+- ✅ **alwaysOutputData** en todos los nodos Postgres críticos
+- ✅ **Rate limiting**: 500ms en Process Conversation
+- ✅ **SHA-256 nativo**: Implementado en JS sin crypto module
+- ✅ **Patrón híbrido**: Recuperación resiliente de datos post-SQL
+- ✅ **external_attrib_id con conversion_name**: Formato `conv-{project}-{phone}-{name}`
 
 **Optimizaciones clave:**
 - **Cache de clasificaciones**: Evita re-clasificar conversaciones idénticas.
