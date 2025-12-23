@@ -353,13 +353,13 @@
     {
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "// Los datos ya vienen formateados desde PostgreSQL\n// Solo pasarlos directamente\nreturn $input.item.json;"
+        "jsCode": "// Preparar fila para Google Sheets\nconst itemIndex = $itemIndex;\nconst allParsed = $('Parse AI Response').all();\nconst data = allParsed[itemIndex]?.json;\n\nif (!data) {\n  throw new Error(`No data at index ${itemIndex}`);\n}\n\n// Formatear timestamp para Google Ads (Colombia UTC-5)\nconst formatDate = (isoString) => {\n  const date = new Date(isoString);\n  return date.toISOString().replace('T', ' ').substring(0, 19) + '-05:00';\n};\n\n// Usar conversion_name dinámico en lugar de labelMap hardcoded\n// Esto soporta N conversiones (no limitado a 3)\nconst labelText = data.conversion_name || `Label ${data.ai_label}`;\n\nreturn {\n  click_id: data.click_id || '',\n  conversion_name: data.conversion_name,\n  conversion_time: formatDate(data.conversion_time),\n  conversion_value: data.conversion_value,\n  conversion_currency: data.conversion_currency,\n  phone_e164: data.phone_e164,\n  ai_reason: data.ai_reason,\n  ai_confidence: Math.round(data.ai_confidence * 100) / 100,\n  external_attrib_id: data.external_attrib_id,\n  label_text: labelText,\n  sheet_spreadsheet_id: data.config.sheet_spreadsheet_id,\n  sheet_name: data.config.sheet_conversions_name || 'conversions'\n};"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -19328,
-        -4360
+        -19616,
+        -3952
       ],
       "id": "09947474-23ac-4a42-ab4d-b64dbba8f10c",
       "name": "Prepare for Sheets"
@@ -380,27 +380,18 @@
         "columns": {
           "mappingMode": "defineBelow",
           "value": {
-            "external_attrib_id": "={{ $json.external_attrib_id }}",
-            "Google Click ID": "={{ $json.click_id || '' }}",
+            "Google Click ID": "={{ $json.click_id }}",
             "Conversion Name": "={{ $json.conversion_name }}",
             "Conversion Time": "={{ $json.conversion_time }}",
             "Conversion Value": "={{ $json.conversion_value }}",
             "Conversion Currency": "={{ $json.conversion_currency }}",
             "phone_e164": "={{ $json.phone_e164 }}",
             "ai_reason": "={{ $json.ai_reason }}",
-            "ai_confidence": "={{ $json.ai_confidence }}"
+            "ai_confidence": "={{ $json.ai_confidence }}",
+            "external_attrib_id": "={{ $json.external_attrib_id }}"
           },
           "matchingColumns": ["external_attrib_id"],
           "schema": [
-            {
-              "id": "external_attrib_id",
-              "displayName": "external_attrib_id",
-              "required": false,
-              "defaultMatch": true,
-              "display": true,
-              "type": "string",
-              "canBeUsedToMatch": true
-            },
             {
               "id": "Google Click ID",
               "displayName": "Google Click ID",
@@ -472,6 +463,15 @@
               "display": true,
               "type": "string",
               "canBeUsedToMatch": true
+            },
+            {
+              "id": "external_attrib_id",
+              "displayName": "external_attrib_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
             }
           ],
           "attemptToConvertTypes": false,
@@ -486,33 +486,11 @@
         -4272
       ],
       "id": "26b3afd8-3400-4329-8036-3d49932158ca",
-      "name": "Upsert to Sheets",
+      "name": "Append to Sheets",
       "credentials": {
         "googleSheetsOAuth2Api": {
           "id": "cTxVw7JPxAQjJZR5",
           "name": "Google Sheets account"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "operation": "executeQuery",
-        "query": "SELECT \n  c.click_id,\n  c.conversion_name,\n  TO_CHAR(c.conversion_time AT TIME ZONE 'America/Bogota', 'YYYY-MM-DD HH24:MI:SS-05:00') as conversion_time,\n  c.conversion_value,\n  c.conversion_currency,\n  c.phone_e164,\n  c.ai_reason,\n  ROUND(c.ai_confidence::numeric, 2) as ai_confidence,\n  c.external_attrib_id,\n  p.sheet_spreadsheet_id,\n  p.sheet_conversions_name as sheet_name\nFROM conversions c\nJOIN projects p ON c.project_id = p.project_id\nWHERE c.conversion_id = ANY(\n  SELECT conversion_id \n  FROM conversions \n  WHERE updated_at >= NOW() - INTERVAL '5 minutes'\n  ORDER BY updated_at DESC\n  LIMIT 100\n);",
-        "options": {}
-      },
-      "type": "n8n-nodes-base.postgres",
-      "typeVersion": 2.6,
-      "position": [
-        -19456,
-        -4464
-      ],
-      "id": "query-recent-conv-001",
-      "name": "Query Recent Conversions",
-      "alwaysOutputData": true,
-      "credentials": {
-        "postgres": {
-          "id": "8YJV6aXkwW8GDwrM",
-          "name": "Postgres account"
         }
       }
     },
@@ -682,6 +660,11 @@
             "node": "Save Conversion",
             "type": "main",
             "index": 0
+          },
+          {
+            "node": "Prepare for Sheets",
+            "type": "main",
+            "index": 0
           }
         ]
       ]
@@ -708,37 +691,20 @@
         ]
       ]
     },
-    "Mark as Processed": {
-      "main": [
-        [
-          {
-            "node": "Query Recent Conversions",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Query Recent Conversions": {
-      "main": [
-        [
-          {
-            "node": "Prepare for Sheets",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
     "Prepare for Sheets": {
       "main": [
         [
           {
-            "node": "Upsert to Sheets",
+            "node": "Append to Sheets",
             "type": "main",
             "index": 0
           }
         ]
+      ]
+    },
+    "Mark as Processed": {
+      "main": [
+        []
       ]
     }
   },
