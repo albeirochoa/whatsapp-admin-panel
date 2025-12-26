@@ -207,12 +207,12 @@ export const generateOptimizedWidgetCode = (user, selectedProject) => {
     }).catch(function() {});
   }
 
-  function openWhatsApp(phone, agentName) {
+  function openWhatsApp(phone, agentName, customMessage) {
     var clickInfo = getClickId();
     var clickId = clickInfo.id;
     var hash = clickInfo.hash;
 
-    var message = (widgetConfig.message || '¡Hola! 👋') + ' 📄 ' + document.title;
+    var message = (customMessage || widgetConfig.message || '¡Hola! 👋') + ' 📄 ' + document.title;
     if (hash) {
       message += ' 🏷️ Ref: #' + hash;
     }
@@ -369,6 +369,28 @@ export const generateOptimizedWidgetCode = (user, selectedProject) => {
         });
       }
     }
+
+    // Enlazar clicks en anchors con #whatsapp para capturar webhook igual que el botón
+    attachLinkHandlers(agents);
+  }
+
+  // Vincula enlaces que contengan #whatsapp para abrir y trackear igual que el botón
+  function attachLinkHandlers(agents) {
+    var links = document.querySelectorAll('a[href*="#whatsapp"]');
+    if (!links || links.length === 0) return;
+
+    var defaultAgent = (agents && agents.length > 0) ? agents[0] : (widgetAgents && widgetAgents.length > 0 ? widgetAgents[0] : null);
+
+    links.forEach(function(link) {
+      link.addEventListener('click', function(e) {
+        e.preventDefault();
+        var phone = link.getAttribute('data-phone') || (defaultAgent ? defaultAgent.phone : null);
+        if (!phone) return;
+        var name = link.getAttribute('data-name') || (defaultAgent ? defaultAgent.name : 'default');
+        var customMessage = link.getAttribute('data-message') || null;
+        openWhatsApp(phone, name, customMessage);
+      });
+    });
   }
 
   // ==========================================

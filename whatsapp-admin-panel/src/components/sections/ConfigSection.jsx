@@ -106,7 +106,12 @@ const ConfigSection = ({ config, setConfig, onSave, publishing }) => {
               className="form-input"
               value={config.prompt_template || ''}
               onChange={(e) => setConfig({ ...config, prompt_template: e.target.value })}
-              placeholder="Eres un clasificador de leads. Clasifica cada conversación con un número:\n1 = Solo consultó\n2 = Interesado\n3 = Compró\n\nResponde SOLO con JSON: {\"label\": 1, \"confidence\": 0.95}"
+              placeholder={`Eres un clasificador de leads. Clasifica cada conversación con un número:
+1 = Solo consultó
+2 = Interesado
+3 = Compró
+
+Responde SOLO con JSON: {"label": 1, "confidence": 0.95}`}
               rows="6"
               style={{ fontFamily: 'monospace', fontSize: '13px' }}
             />

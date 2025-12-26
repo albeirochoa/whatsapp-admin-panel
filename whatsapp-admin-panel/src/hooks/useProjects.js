@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { collection, doc, setDoc, deleteDoc, onSnapshot, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { canCreateProject } from '../utils/permissions';
+import { syncClientConfig } from '../utils/syncClient';
 
 export const useProjects = (user, userData) => {
   const [projects, setProjects] = useState([]);
@@ -76,6 +77,21 @@ export const useProjects = (user, userData) => {
           onlyMobile: false
         }
       });
+
+      // Sync inicial con n8n (Workflow 0)
+      try {
+        const syncResult = await syncClientConfig({
+          projectId: projectRef.id,
+          projectName: name,
+          config: {},
+          agents: []
+        });
+        if (!syncResult.success) {
+          console.error('Sync n8n fallo en createProject:', syncResult.error);
+        }
+      } catch (syncError) {
+        console.error('Sync n8n exception en createProject:', syncError);
+      }
 
       return { success: true };
     } catch (error) {
