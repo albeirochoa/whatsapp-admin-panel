@@ -448,6 +448,130 @@ console.log(TrackingUtils.getDebugInfo());
 
 ---
 
+## 🔄 Scripts de Actualización Masiva
+
+Cuando modificas el código base del widget (`widgetJsGenerator.js` o `widgetCodeGenerator.optimized.js`), los archivos `.js` en Firebase Storage quedan con código antiguo. Para actualizar todos los widgets de todos los usuarios de forma centralizada, usa estos scripts:
+
+### Verificar versiones (diagnóstico)
+
+```bash
+npm run check-widgets
+```
+
+**Qué hace**:
+- Descarga todos los archivos `.js` de Firebase Storage
+- Verifica si contienen las últimas features:
+  - `attachLinkHandlers` (enlaces #whatsapp)
+  - `buildWhatsAppMessage` (construcción de mensajes)
+  - `project_id` (tracking multi-tenant)
+  - `wa.me/` (detección móvil/escritorio)
+- Genera reporte de widgets actualizados vs desactualizados
+- **NO modifica nada** (solo lectura)
+
+**Output de ejemplo**:
+```
+🔍 VERIFICACIÓN DE VERSIONES DE WIDGETS
+
+📊 Total verificados: 10
+✅ Actualizados: 7 (70%)
+⚠️  Desactualizados: 3 (30%)
+❌ Sin archivo .js: 0
+
+💡 Ejecuta "npm run update-widgets" para actualizarlos
+```
+
+### Actualizar todos los widgets
+
+```bash
+npm run update-widgets
+```
+
+**Qué hace**:
+- Lee todos los usuarios y proyectos de Firestore
+- Regenera archivos `.json` y `.js` en Storage con la última versión del código
+- Mantiene la configuración de cada proyecto (no la modifica)
+- Genera reporte detallado con estadísticas
+
+**Output de ejemplo**:
+```
+🚀 ACTUALIZACIÓN MASIVA DE WIDGETS
+
+👤 Usuario: usuario@example.com
+   📦 Proyecto: Proyecto A
+      👥 Agentes: 3
+      ✅ Widget actualizado
+      🔗 JSON: https://...HMR9Z75xI0PYxEYStK1l.json
+      🔗 JS:   https://...HMR9Z75xI0PYxEYStK1l.js
+
+============================================
+✅ Widgets actualizados: 10
+❌ Errores: 0
+🎉 Actualización completada
+```
+
+### Workflow recomendado
+
+Cuando hagas mejoras al código del widget:
+
+1. **Modificar el código**:
+   ```bash
+   # Ejemplo: Agregar nueva feature al widget
+   code src/utils/widgetJsGenerator.js
+   ```
+
+2. **Commit los cambios**:
+   ```bash
+   git add src/utils/widgetJsGenerator.js
+   git commit -m "feat: nueva feature X en widget"
+   ```
+
+3. **Verificar estado actual** (opcional):
+   ```bash
+   npm run check-widgets
+   ```
+
+4. **Actualizar todos los widgets**:
+   ```bash
+   npm run update-widgets
+   ```
+
+5. **Verificar que funcionó**:
+   ```bash
+   npm run check-widgets
+   # Debería mostrar 100% actualizados
+   ```
+
+### Ventaja del Script Loader Pattern
+
+El código del widget se carga desde Firebase Storage (patrón Script Loader):
+
+```html
+<!-- Loader snippet (10 líneas en Tag Manager) -->
+<script>
+(function() {
+  var s = document.createElement('script');
+  s.src = 'https://firebasestorage.googleapis.com/.../proyecto.js';
+  s.async = true;
+  document.head.appendChild(s);
+})();
+</script>
+```
+
+**Beneficio**: Cuando actualizas el archivo `.js` en Storage, **todos los sitios web se actualizan automáticamente** sin que el cliente tenga que modificar nada.
+
+**Sin los scripts** → Tendrías que notificar a 30+ usuarios para que "guarden de nuevo" manualmente
+**Con los scripts** → `npm run update-widgets` y todos actualizados en segundos
+
+### Documentación completa
+
+Ver [scripts/README.md](../../scripts/README.md) para:
+- Configuración de variables de entorno
+- Troubleshooting detallado
+- Cómo agregar nuevas features a verificar
+- Precauciones y mejores prácticas
+
+---
+
 ## Glosario
 
 - **gclid**: Google Click ID (parámetro de URL de Google Ads)
@@ -461,5 +585,5 @@ console.log(TrackingUtils.getDebugInfo());
 
 ---
 
-**Última actualización**: 2025-12-28
+**Última actualización**: 2025-12-29
 **Versión de arquitectura**: ARQUITECTURA.md - 2025-12-20
