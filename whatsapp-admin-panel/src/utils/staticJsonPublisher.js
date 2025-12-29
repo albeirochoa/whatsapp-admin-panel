@@ -49,7 +49,7 @@ export const publishWidgetConfig = async (userId, projectId, config, agents) => 
     const jsonUrl = await getDownloadURL(jsonRef);
 
     // 6. NUEVO: Generar y subir el código JavaScript puro
-    const jsCode = generateWidgetJS(jsonUrl);
+    const jsCode = generateWidgetJS(jsonUrl, projectId);
     const jsRef = ref(storage, `widgets/${userId}/${projectId}.js`);
 
     await uploadString(jsRef, jsCode, 'raw', {

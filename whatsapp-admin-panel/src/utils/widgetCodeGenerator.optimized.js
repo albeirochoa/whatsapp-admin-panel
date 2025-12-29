@@ -1,5 +1,5 @@
 /**
- * Generador de código del widget OPTIMIZADO
+ * Generador de código del widget OPTIMIZADO 2026
  * Lee desde JSON estático en Storage (no Firestore)
  * Esto permite escalar a millones de visitas sin costos
  */
@@ -14,7 +14,7 @@ export const generateOptimizedWidgetCode = (user, selectedProject) => {
   const configUrl = `https://firebasestorage.googleapis.com/v0/b/whatsapp-widget-admin.firebasestorage.app/o/widgets%2F${userId}%2F${projectId}.json?alt=media`;
 
   return `<!-- WhatsApp Widget Optimizado - ${selectedProject.name} -->
-<!-- Actualización automática desde el panel -->
+<!-- Actualización automática desde el panel del widget-->
 <!-- 🚀 Optimizado para millones de visitas sin costos extra -->
 
 <script>
@@ -119,7 +119,7 @@ export const generateOptimizedWidgetCode = (user, selectedProject) => {
   }
 
   // ==========================================
-  // UTILIDADES
+  // UTILIDADES DEL WIDGET
   // ==========================================
 
   function isMobile() {
@@ -146,6 +146,67 @@ export const generateOptimizedWidgetCode = (user, selectedProject) => {
     }
 
     return filtered.length > 0 ? url + '?' + filtered.join('&') : url;
+  }
+
+  // Construye el mensaje de WhatsApp (reutilizable para enlaces #whatsapp)
+  function buildWhatsAppMessage(customMessage) {
+    var clickInfo = getClickId();
+    var hash = clickInfo.hash;
+
+    var message = (customMessage || widgetConfig.message || '¡Hola! 👋') + ' 📄 ' + document.title;
+    if (hash) {
+      message += ' 🏷️ Ref: #' + hash;
+    }
+    message += ' 🔗 ' + getCurrentUrl();
+
+    if (window._waDebug) {
+      console.log('[WA] buildWhatsAppMessage', {
+        customMessage: customMessage,
+        message: message,
+        hash: hash
+      });
+    }
+
+    return message;
+  }
+
+  // Envía tracking/webhook sin bloquear navegación (para enlaces #whatsapp reescritos)
+  function sendTrackingData(phone, agentName, customMessage) {
+    var clickInfo = getClickId();
+
+    if (window._waDebug) {
+      console.log('[WA] sendTrackingData', {
+        phone: phone,
+        agentName: agentName,
+        customMessage: customMessage,
+        clickId: clickInfo.id,
+        hash: clickInfo.hash
+      });
+    }
+
+    sendWebhook({
+      gclid: clickInfo.id || null,
+      gclid_hash: clickInfo.hash || null,
+      phone_e164: phone,
+      agent_selected: agentName || 'default',
+      first_click_time_iso: new Date().toISOString(),
+      landing_url: window.location.href,
+      page_title: document.title,
+      user_agent: navigator.userAgent,
+      device_type: isMobile() ? 'mobile' : 'desktop',
+      project_id: '${projectId}',
+      trigger: customMessage ? 'custom_link' : 'link'
+    });
+
+    if (window.dataLayer) {
+      window.dataLayer.push({
+        event: 'whatsapp_lead_click',
+        lead_platform: 'whatsapp',
+        agent_name: agentName || 'default',
+        lead_traffic: clickInfo.id ? 'paid_google' : 'organic',
+        lead_ref: clickInfo.hash || 'sin_ref'
+      });
+    }
   }
 
   function shouldShowOnPage(agent) {
@@ -374,23 +435,86 @@ export const generateOptimizedWidgetCode = (user, selectedProject) => {
     attachLinkHandlers(agents);
   }
 
-  // Vincula enlaces que contengan #whatsapp para abrir y trackear igual que el botón
+  // Reescribe enlaces que contengan #whatsapp para que apunten directamente a WhatsApp
+  var linkHandlerAttached = false;
   function attachLinkHandlers(agents) {
-    var links = document.querySelectorAll('a[href*="#whatsapp"]');
-    if (!links || links.length === 0) return;
+    if (linkHandlerAttached) return;
+    linkHandlerAttached = true;
 
-    var defaultAgent = (agents && agents.length > 0) ? agents[0] : (widgetAgents && widgetAgents.length > 0 ? widgetAgents[0] : null);
+    function processWhatsAppLinks() {
+      var defaultAgent = (agents && agents.length > 0)
+        ? agents[0]
+        : (widgetAgents && widgetAgents.length > 0 ? widgetAgents[0] : null);
 
-    links.forEach(function(link) {
-      link.addEventListener('click', function(e) {
-        e.preventDefault();
-        var phone = link.getAttribute('data-phone') || (defaultAgent ? defaultAgent.phone : null);
-        if (!phone) return;
-        var name = link.getAttribute('data-name') || (defaultAgent ? defaultAgent.name : 'default');
+      if (!defaultAgent) return;
+
+      var whatsappLinks = document.querySelectorAll('a[href*="#whatsapp"]');
+
+      for (var i = 0; i < whatsappLinks.length; i++) {
+        var link = whatsappLinks[i];
+
+        // Evitar procesar el mismo enlace dos veces
+        if (link.getAttribute('data-wa-processed') === 'true') continue;
+        link.setAttribute('data-wa-processed', 'true');
+
+        var phone = link.getAttribute('data-phone') || defaultAgent.phone;
+        var name = link.getAttribute('data-name') || defaultAgent.name;
         var customMessage = link.getAttribute('data-message') || null;
-        openWhatsApp(phone, name, customMessage);
+
+        // Construir URL de WhatsApp (móvil: wa.me, escritorio: web.whatsapp.com)
+        var message = buildWhatsAppMessage(customMessage);
+        var cleanPhone = phone.replace(/[^0-9]/g, '');
+        var whatsappUrl = isMobile()
+          ? 'https://wa.me/' + cleanPhone + '?text=' + encodeURIComponent(message)
+          : 'https://web.whatsapp.com/send?phone=' + cleanPhone + '&text=' + encodeURIComponent(message);
+
+        if (window._waDebug) {
+          console.log('[WA] processWhatsAppLinks', {
+            link: link,
+            phone: phone,
+            name: name,
+            customMessage: customMessage,
+            whatsappUrl: whatsappUrl
+          });
+        }
+
+        // Reescribir el href (elimina #whatsapp y pone URL de WhatsApp)
+        link.href = whatsappUrl;
+        link.target = '_blank';
+        link.rel = 'noopener';
+
+        // Agregar tracking sin prevenir navegación
+        (function(capturedPhone, capturedName, capturedMessage) {
+          link.addEventListener('click', function() {
+            sendTrackingData(capturedPhone, capturedName, capturedMessage);
+          });
+        })(phone, name, customMessage);
+      }
+    }
+
+    // Procesar enlaces iniciales
+    processWhatsAppLinks();
+
+    // Observar enlaces agregados dinámicamente
+    if (window.MutationObserver) {
+      var observer = new MutationObserver(function(mutations) {
+        var shouldProcess = false;
+        for (var i = 0; i < mutations.length; i++) {
+          if (mutations[i].addedNodes.length > 0) {
+            shouldProcess = true;
+            break;
+          }
+        }
+        if (shouldProcess) {
+          processWhatsAppLinks();
+        }
       });
-    });
+
+      observer.observe(document.body, {
+        childList: true,
+        subtree: true
+      });
+    }
   }
 
   // ==========================================
