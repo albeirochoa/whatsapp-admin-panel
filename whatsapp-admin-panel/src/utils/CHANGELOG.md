@@ -4,6 +4,67 @@ Registro de cambios significativos en los archivos de utilidades.
 
 ---
 
+## [2025-12-29] - Scripts de Actualización Masiva de Widgets
+
+### 🆕 Agregado
+
+#### `scripts/updateAllWidgets.js` (nuevo archivo)
+- **Propósito**: Actualizar todos los archivos `.js` en Firebase Storage cuando se actualiza el código base
+- **Funcionalidad**:
+  - Lee todos los usuarios y proyectos de Firestore
+  - Regenera archivos `.json` y `.js` en Storage con última versión del código
+  - Mantiene configuración de cada proyecto (no la modifica)
+  - Genera reporte detallado con estadísticas de actualización
+- **Evita**: Tener que notificar a 30+ usuarios para que "guarden de nuevo" manualmente
+
+#### `scripts/checkWidgetVersions.js` (nuevo archivo)
+- **Propósito**: Verificar qué widgets tienen los últimos cambios del código base
+- **Funcionalidad**:
+  - Descarga todos los archivos `.js` de Storage
+  - Verifica presencia de features recientes:
+    - `attachLinkHandlers` (enlaces #whatsapp)
+    - `buildWhatsAppMessage` (construcción de mensajes)
+    - `project_id` (tracking multi-tenant)
+    - `wa.me/` (detección móvil/escritorio)
+  - Genera reporte de widgets desactualizados
+  - Solo lectura (no modifica nada)
+
+#### `scripts/README.md` (nuevo archivo)
+- Documentación completa de scripts de mantenimiento
+- Instrucciones de uso y workflow recomendado
+- Ejemplos de output de cada script
+- Troubleshooting y precauciones
+
+#### `.env.example` (nuevo archivo)
+- Template para variables de entorno de Firebase
+- Documentación de configuración necesaria para scripts
+
+### 🔧 Modificado
+
+#### `package.json`
+- **Agregado `"type": "module"`**: Soporte para ES6 imports en scripts
+- **Nuevos comandos npm**:
+  - `npm run check-widgets`: Ejecuta verificación de versiones
+  - `npm run update-widgets`: Ejecuta actualización masiva
+
+#### `staticJsonPublisher.js`
+- **Función `deleteWidgetConfig()`**: Ahora borra AMBOS archivos (JSON + JS)
+  - Antes: Solo borraba el `.json`
+  - Ahora: Borra `.json` y `.js` para evitar archivos huérfanos
+
+### 💡 Mejora arquitectónica
+
+**Problema identificado**:
+- Cuando se actualiza el código base (`widgetJsGenerator.js`), los archivos `.js` en Storage quedan con código viejo
+- Requería notificar a usuarios para que "guarden de nuevo" manualmente
+
+**Solución implementada**:
+- Scripts de actualización masiva que regeneran todos los `.js` centralizadamente
+- Workflow: Modificar código → Commit → `npm run update-widgets` → Todos los usuarios actualizados
+- Ventaja del patrón Script Loader: Código en Storage se actualiza → todos los sitios tienen última versión
+
+---
+
 ## [2025-12-28] - Soporte para Enlaces `#whatsapp` + Detección Móvil/Escritorio
 
 ### 🆕 Agregado

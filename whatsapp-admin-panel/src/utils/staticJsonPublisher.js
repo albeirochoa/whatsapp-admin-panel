@@ -99,12 +99,18 @@ export const getWidgetJsUrl = (userId, projectId) => {
 };
 
 /**
- * Elimina el JSON estático cuando se elimina un proyecto
+ * Elimina el JSON y el archivo JS cuando se elimina un proyecto
  */
 export const deleteWidgetConfig = async (userId, projectId) => {
   try {
-    const storageRef = ref(storage, `widgets/${userId}/${projectId}.json`);
-    await deleteObject(storageRef);
+    // Borrar el archivo JSON
+    const jsonRef = ref(storage, `widgets/${userId}/${projectId}.json`);
+    await deleteObject(jsonRef);
+
+    // Borrar el archivo JavaScript
+    const jsRef = ref(storage, `widgets/${userId}/${projectId}.js`);
+    await deleteObject(jsRef);
+
     return { success: true };
   } catch (error) {
     console.error('Error deleting widget:', error);

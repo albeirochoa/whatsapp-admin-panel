@@ -106,7 +106,9 @@ src/contexts/AuthContext.jsx
 ```
 src/utils/permissions.js
 src/utils/staticJsonPublisher.js
-src/utils/widgetCodeGenerator.optimized.js  ← ESTE ES EL QUE SE USA
+src/utils/syncClient.js
+src/utils/widgetCodeGenerator.optimized.js  ← Snippet largo (embebido)
+src/utils/widgetJsGenerator.js              ← Snippet corto (Storage)
 ```
 
 ### Constantes
@@ -147,7 +149,7 @@ rm components/PlanLimitsBanner.jsx components/SuperAdminDashboard.jsx components
 | Componentes | 4 | 11 |
 | Hooks | 0 | 3 |
 | Contextos | 1 | 1 |
-| Utilidades | 2 | 3 |
-| **TOTAL** | **11** | **19** |
+| Utilidades | 2 | 5 |
+| **TOTAL** | **11** | **21** |
 
 **Ahorro de espacio estimado:** ~100 KB de código sin usar
