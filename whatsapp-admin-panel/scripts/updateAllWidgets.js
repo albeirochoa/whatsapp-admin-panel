@@ -18,14 +18,18 @@ import { initializeApp } from 'firebase/app';
 import { getFirestore, collection, getDocs } from 'firebase/firestore';
 import { publishWidgetConfig } from '../src/utils/staticJsonPublisher.js';
 
-// Configuración de Firebase (asegúrate de usar tu config real)
+// NOTA: Este script requiere que tengas las reglas de Firestore configuradas para permitir
+// lectura pública de la colección 'users', O que estés autenticado con Firebase Auth.
+// Alternativamente, usa Firebase Admin SDK con service account para acceso completo.
+
+// Configuración de Firebase (importada desde src/firebase.js)
 const firebaseConfig = {
-  apiKey: process.env.REACT_APP_FIREBASE_API_KEY || "AIzaSyDVcN9TvXLhcqzLKxH-oLLnpMOVH_kbS-0",
-  authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN || "whatsapp-widget-admin.firebaseapp.com",
-  projectId: process.env.REACT_APP_FIREBASE_PROJECT_ID || "whatsapp-widget-admin",
-  storageBucket: process.env.REACT_APP_FIREBASE_STORAGE_BUCKET || "whatsapp-widget-admin.appspot.com",
-  messagingSenderId: process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID || "123456789",
-  appId: process.env.REACT_APP_FIREBASE_APP_ID || "1:123456789:web:abcdef"
+  apiKey: "AIzaSyBuOstFD6-UoZlqzWtnHGmmaNCLpXlq3us",
+  authDomain: "whatsapp-widget-admin.firebaseapp.com",
+  projectId: "whatsapp-widget-admin",
+  storageBucket: "whatsapp-widget-admin.firebasestorage.app",
+  messagingSenderId: "293950188828",
+  appId: "1:293950188828:web:43ccd14c23490cff629ed9"
 };
 
 // Inicializar Firebase
