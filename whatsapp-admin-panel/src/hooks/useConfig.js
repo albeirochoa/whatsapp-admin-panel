@@ -15,6 +15,7 @@ export const useConfig = (user, selectedProject) => {
     // Tracking & Privacidad (valores por defecto)
     enableTracking: true,
     requireConsent: true,
+    enableUniversalHash: false,
     trackingMaxAgeDays: 90,
     trackingFormat: '[ref:{id}]'
   });

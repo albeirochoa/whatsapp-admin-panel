@@ -95,14 +95,62 @@ export const generateWidgetJS = (configUrl, projectId = '') => {
     var clickId = getStoredClickId();
     var hash = getStoredHash();
 
-    if (clickId && !hash) {
-      hash = getShortHash(clickId);
+    // Si no hay hash almacenado, intentar generar uno
+    if (!hash) {
+      if (clickId) {
+        // Caso 1: Hay gclid → generar hash de gclid
+        hash = getShortHash(clickId);
+      } else if (widgetConfig.enableUniversalHash) {
+        // Caso 2: No hay gclid pero está habilitado hash universal → generar hash de sesión
+        hash = getOrCreateSessionHash();
+      }
     }
 
     return {
       id: clickId,
       hash: hash
     };
+  }
+
+  // Genera o recupera un hash de sesión único (para tráfico orgánico/directo)
+  function getOrCreateSessionHash() {
+    // Intentar leer hash de sesión existente
+    var sessionHash = null;
+    var match = document.cookie.match(new RegExp('(^| )_session_hash=([^;]+)'));
+    if (match) {
+      sessionHash = match[2];
+    } else {
+      try {
+        sessionHash = localStorage.getItem('_session_hash');
+      } catch (e) {}
+    }
+
+    // Si no existe, crear uno nuevo basado en timestamp + random
+    if (!sessionHash) {
+      var timestamp = new Date().getTime();
+      var random = Math.random().toString(36).substring(2, 7);
+      var sessionId = timestamp + '-' + random;
+      sessionHash = getShortHash(sessionId);
+
+      // Guardar por trackingMaxAgeDays (default 90 días)
+      var maxAgeDays = widgetConfig.trackingMaxAgeDays || 90;
+      var expiryDate = new Date();
+      expiryDate.setDate(expiryDate.getDate() + maxAgeDays);
+
+      document.cookie = '_session_hash=' + sessionHash + '; expires=' + expiryDate.toUTCString() + '; path=/; SameSite=Lax';
+      document.cookie = '_gcl_hash=' + sessionHash + '; expires=' + expiryDate.toUTCString() + '; path=/; SameSite=Lax';
+
+      try {
+        localStorage.setItem('_session_hash', sessionHash);
+        localStorage.setItem('_gcl_hash', sessionHash);
+      } catch (e) {}
+
+      if (window._waDebug) {
+        console.log('[WA] Hash de sesión creado:', sessionHash);
+      }
+    }
+
+    return sessionHash;
   }
 
   // ==========================================

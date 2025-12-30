@@ -17,7 +17,9 @@ export const publishWidgetConfig = async (userId, projectId, config, agents) => 
         webhookUrl: config.webhookUrl,
         excludePages: config.excludePages,
         delayShow: config.delayShow,
-        onlyMobile: config.onlyMobile
+        onlyMobile: config.onlyMobile,
+        enableUniversalHash: config.enableUniversalHash || false,
+        trackingMaxAgeDays: config.trackingMaxAgeDays || 90
       },
       agents: agents.map(agent => ({
         name: agent.name,

@@ -136,27 +136,54 @@ const ConfigSection = ({ config, setConfig, onSave, publishing }) => {
             <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
             <line x1="12" y1="22.08" x2="12" y2="12" />
           </svg>
-          Clasificación con OpenAI
+          Configuración de Clasificación IA
         </h4>
 
         <div className="form-grid">
           <div className="form-group full-width">
-            <label className="form-label">Prompt Template *</label>
+            <label className="form-label">Descripción del Negocio / Asistente *</label>
+            <textarea
+              className="form-input"
+              value={config.business_description || ''}
+              onChange={(e) => setConfig({ ...config, business_description: e.target.value })}
+              placeholder="Ej: Una tienda de regalos, ramos y desayunos sorpresa en Bogotá."
+              rows="2"
+            />
+            <p style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>
+              Describe brevemente qué hace tu empresa para que la IA tenga contexto.
+            </p>
+          </div>
+        </div>
+
+        <div className="form-grid">
+          <div className="form-group full-width">
+            <label className="form-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              Instrucciones Adicionales (IA) (Opcional)
+              <span style={{
+                background: '#e0f2fe',
+                color: '#0369a1',
+                padding: '2px 8px',
+                borderRadius: '4px',
+                fontSize: '11px',
+                fontWeight: '600',
+                border: '1px solid #bae6fd'
+              }}>
+                ✨ Automatizado: Empresa + Criterios + Formato
+              </span>
+            </label>
             <textarea
               className="form-input"
               value={config.prompt_template || ''}
               onChange={(e) => setConfig({ ...config, prompt_template: e.target.value })}
-              placeholder={`Eres un clasificador de leads. Clasifica cada conversación con un número:
-1 = Solo consultó
-2 = Interesado
-3 = Compró
-
-Responde SOLO con JSON: {"label": 1, "confidence": 0.95}`}
-              rows="6"
-              style={{ fontFamily: 'monospace', fontSize: '13px' }}
+              placeholder={`Escribe aquí los criterios de clasificación para cada label. Ejemplo:
+Label 1: Solo saludo o consulta general que no avanza.
+Label 2: Pregunta precios, catálogo o muestra interés claro.
+Label 3: Confirma pedido, envía datos de pago o dirección.`}
+              rows="8"
+              style={{ fontFamily: 'inherit', fontSize: '14px', lineHeight: '1.5' }}
             />
-            <p style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>
-              Define las reglas para OpenAI. Debe explicar cada label definido arriba.
+            <p style={{ fontSize: '12px', color: '#64748b', marginTop: '8px', fontStyle: 'italic' }}>
+              Este campo ahora es <strong>opcional</strong>. Puedes añadir instrucciones adicionales o dejarlo vacío; el sistema ya construye el prompt base con el contexto y las conversiones definidas arriba.
             </p>
           </div>
 
@@ -238,10 +265,10 @@ Responde SOLO con JSON: {"label": 1, "confidence": 0.95}`}
             </p>
           </div>
         </div>
-      </div>
+      </div >
 
       {/* Sección de Google Sheets */}
-      <div style={{ marginTop: '20px', paddingTop: '20px', borderTop: '1px solid #e5e7eb' }}>
+      < div style={{ marginTop: '20px', paddingTop: '20px', borderTop: '1px solid #e5e7eb' }}>
         <h4 style={{ fontSize: '14px', fontWeight: '600', marginBottom: '16px', color: '#374151', display: 'flex', alignItems: 'center' }}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: '8px' }}>
             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
@@ -290,7 +317,7 @@ Responde SOLO con JSON: {"label": 1, "confidence": 0.95}`}
             />
           </div>
         </div>
-      </div>
+      </div >
 
       <div style={{ marginTop: '20px', paddingTop: '20px', borderTop: '1px solid #e5e7eb' }}>
         <h4 style={{ fontSize: '14px', fontWeight: '600', marginBottom: '16px', color: '#374151' }}>
@@ -338,6 +365,23 @@ Responde SOLO con JSON: {"label": 1, "confidence": 0.95}`}
                 </label>
               </div>
 
+              <div className="form-group full-width">
+                <label className="form-label" style={{ display: 'flex', alignItems: 'start', cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={config.enableUniversalHash === true}
+                    onChange={(e) => setConfig({ ...config, enableUniversalHash: e.target.checked })}
+                    style={{ marginRight: '8px', marginTop: '2px' }}
+                  />
+                  <span>
+                    <strong>Generar hash de sesión para TODO el tráfico (no solo Google Ads)</strong>
+                    <p style={{ fontSize: '12px', color: '#666', marginTop: '4px', fontWeight: 'normal' }}>
+                      Crea un ID único para cada visitante, incluso tráfico orgánico/directo. Útil para identificar leads sin gclid.
+                    </p>
+                  </span>
+                </label>
+              </div>
+
               <div className="form-group">
                 <label className="form-label">Días de persistencia del tracking</label>
                 <input
@@ -379,7 +423,7 @@ Responde SOLO con JSON: {"label": 1, "confidence": 0.95}`}
       >
         {publishing ? 'Publicando...' : 'Guardar y Publicar Widget 🚀'}
       </button>
-    </div>
+    </div >
   );
 };
 
