@@ -33,8 +33,48 @@ const ConfigSection = ({ config, setConfig, onSave, publishing }) => {
             className="form-input"
             value={config.message}
             onChange={(e) => setConfig({ ...config, message: e.target.value })}
-            placeholder="¡Hola! 👋 Me gustaría obtener más información."
+            placeholder="¡Hola! 👋 Estoy en {TITLE} - {URL}"
+            rows={3}
           />
+          <small className="form-text" style={{ marginTop: '8px', display: 'block', color: '#6b7280' }}>
+            Variables disponibles: <code>{'{SITE}'}</code>, <code>{'{TITLE}'}</code>, <code>{'{URL}'}</code>, <code>{'{HREF}'}</code>, <code>{'{HASH}'}</code>, <code>{'{AGENT}'}</code>, <code>{'{DATE}'}</code>
+          </small>
+
+          {/* Preview del mensaje */}
+          <div style={{
+            marginTop: '12px',
+            padding: '12px',
+            background: '#f9fafb',
+            border: '1px solid #e5e7eb',
+            borderRadius: '8px',
+            fontSize: '13px'
+          }}>
+            <strong style={{ display: 'block', marginBottom: '6px', color: '#374151' }}>Vista previa:</strong>
+            <span style={{ color: '#6b7280' }}>
+              {config.message
+                .replace(/{SITE}/g, config.siteName || 'Mi Sitio')
+                .replace(/{TITLE}/g, 'Título de Ejemplo | Mi Sitio')
+                .replace(/{URL}/g, 'https://ejemplo.com/producto')
+                .replace(/{HREF}/g, 'https://ejemplo.com/producto?utm_source=google')
+                .replace(/{HASH}/g, '#A7K9Q')
+                .replace(/{AGENT}/g, 'Nombre del Agente')
+                .replace(/{DATE}/g, new Date().toLocaleDateString('es-ES'))}
+            </span>
+          </div>
+        </div>
+
+        <div className="form-group full-width">
+          <label className="form-label">Nombre del sitio (para {'{SITE}'})</label>
+          <input
+            type="text"
+            className="form-input"
+            value={config.siteName || ''}
+            onChange={(e) => setConfig({ ...config, siteName: e.target.value })}
+            placeholder="Ej: Mi Tienda Online"
+          />
+          <small className="form-text" style={{ marginTop: '4px', display: 'block', color: '#6b7280' }}>
+            Si no se configura, se usará el título de la página
+          </small>
         </div>
         <div className="form-group">
           <label className="form-label">URL del Webhook (Make/n8n)</label>

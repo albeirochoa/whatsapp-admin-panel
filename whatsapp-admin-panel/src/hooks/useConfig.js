@@ -6,7 +6,8 @@ import { syncClientConfig } from '../utils/syncClient';
 
 export const useConfig = (user, selectedProject) => {
   const [config, setConfig] = useState({
-    message: '¡Hola! 👋 Me gustaría obtener más información.',
+    message: '¡Hola! 👋 Estoy en {TITLE} - {URL}',
+    siteName: '',
     webhookUrl: '',
     excludePages: '/checkout, /gracias',
     delayShow: 2000,

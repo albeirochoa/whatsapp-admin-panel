@@ -13,6 +13,7 @@ export const publishWidgetConfig = async (userId, projectId, config, agents) => 
     const widgetData = {
       config: {
         message: config.message,
+        siteName: config.siteName || '',
         webhookUrl: config.webhookUrl,
         excludePages: config.excludePages,
         delayShow: config.delayShow,

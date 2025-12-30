@@ -148,26 +148,60 @@ export const generateOptimizedWidgetCode = (user, selectedProject) => {
     return filtered.length > 0 ? url + '?' + filtered.join('&') : url;
   }
 
-  // Construye el mensaje de WhatsApp (reutilizable para enlaces #whatsapp)
-  function buildWhatsAppMessage(customMessage) {
-    var clickInfo = getClickId();
-    var hash = clickInfo.hash;
+  // Reemplaza variables dinámicas en el mensaje
+  // Variables disponibles: {SITE}, {TITLE}, {URL}, {HREF}, {HASH}, {AGENT}, {DATE}
+  function replaceMessageVariables(template, agentName) {
+    var message = template || widgetConfig.message || '¡Hola! 👋';
 
-    var message = (customMessage || widgetConfig.message || '¡Hola! 👋') + ' 📄 ' + document.title;
-    if (hash) {
-      message += ' 🏷️ Ref: #' + hash;
+    // Obtener información de tracking
+    var clickInfo = getClickId();
+    var hash = clickInfo.hash || '';
+
+    // Obtener fecha actual
+    var now = new Date();
+    var day = ('0' + now.getDate()).slice(-2);
+    var month = ('0' + (now.getMonth() + 1)).slice(-2);
+    var year = now.getFullYear();
+    var dateStr = day + '/' + month + '/' + year;
+
+    // Definir valores de reemplazo
+    var variables = {
+      '{SITE}': widgetConfig.siteName || document.title.split('|')[0].split('-')[0].trim(),
+      '{TITLE}': document.title,
+      '{URL}': getCurrentUrl(),
+      '{HREF}': window.location.href,
+      '{HASH}': hash ? '#' + hash : '',
+      '{AGENT}': agentName || '',
+      '{DATE}': dateStr
+    };
+
+    // Reemplazar todas las variables
+    for (var key in variables) {
+      if (variables.hasOwnProperty(key)) {
+        var value = variables[key];
+        // Reemplazar todas las ocurrencias de la variable
+        while (message.indexOf(key) !== -1) {
+          message = message.replace(key, value);
+        }
+      }
     }
-    message += ' 🔗 ' + getCurrentUrl();
 
     if (window._waDebug) {
-      console.log('[WA] buildWhatsAppMessage', {
-        customMessage: customMessage,
-        message: message,
-        hash: hash
+      console.log('[WA] replaceMessageVariables', {
+        template: template,
+        agentName: agentName,
+        result: message,
+        variables: variables
       });
     }
 
     return message;
+  }
+
+  // Construye el mensaje de WhatsApp (reutilizable para enlaces #whatsapp)
+  function buildWhatsAppMessage(customMessage, agentName) {
+    var message = customMessage || widgetConfig.message || '¡Hola! 👋';
+    return replaceMessageVariables(message, agentName);
   }
 
   // Envía tracking/webhook sin bloquear navegación (para enlaces #whatsapp reescritos)
@@ -271,13 +305,8 @@ export const generateOptimizedWidgetCode = (user, selectedProject) => {
   function openWhatsApp(phone, agentName, customMessage) {
     var clickInfo = getClickId();
     var clickId = clickInfo.id;
-    var hash = clickInfo.hash;
 
-    var message = (customMessage || widgetConfig.message || '¡Hola! 👋') + ' 📄 ' + document.title;
-    if (hash) {
-      message += ' 🏷️ Ref: #' + hash;
-    }
-    message += ' 🔗 ' + getCurrentUrl();
+    var message = buildWhatsAppMessage(customMessage, agentName);
 
     var url = isMobile()
       ? 'https://wa.me/' + phone + '?text=' + encodeURIComponent(message)
@@ -462,7 +491,7 @@ export const generateOptimizedWidgetCode = (user, selectedProject) => {
         var customMessage = link.getAttribute('data-message') || null;
 
         // Construir URL de WhatsApp (móvil: wa.me, escritorio: web.whatsapp.com)
-        var message = buildWhatsAppMessage(customMessage);
+        var message = buildWhatsAppMessage(customMessage, name);
         var cleanPhone = phone.replace(/[^0-9]/g, '');
         var whatsappUrl = isMobile()
           ? 'https://wa.me/' + cleanPhone + '?text=' + encodeURIComponent(message)
