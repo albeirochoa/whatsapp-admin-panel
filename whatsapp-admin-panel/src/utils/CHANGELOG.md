@@ -4,6 +4,176 @@ Registro de cambios significativos en los archivos de utilidades.
 
 ---
 
+## [2025-12-30] - Sistema de Variables Dinámicas en Mensajes (Tier 1)
+
+### 🆕 Agregado
+
+#### Variables Dinámicas (estilo JoinChat)
+Sistema completo de variables para personalización flexible de mensajes de WhatsApp.
+
+**Variables Tier 1 implementadas**:
+- **`{SITE}`**: Nombre del sitio (configurable o auto desde `document.title`)
+- **`{TITLE}`**: Título de la página actual (`document.title`)
+- **`{URL}`**: URL limpia sin parámetros de tracking
+- **`{HREF}`**: URL completa con todos los parámetros
+- **`{HASH}`**: Hash de referencia del gclid (ej: `#A7K9Q`)
+- **`{AGENT}`**: Nombre del agente seleccionado
+- **`{DATE}`**: Fecha actual en formato `DD/MM/YYYY`
+
+#### `widgetJsGenerator.js`
+- **Función `replaceMessageVariables(template, agentName)`** (líneas 138-186):
+  - Recibe template con variables y nombre de agente
+  - Obtiene valores dinámicos del navegador: `document.title`, `window.location.href`, etc.
+  - Genera fecha actual en formato español
+  - Reemplaza todas las ocurrencias de variables en el mensaje
+  - Debug logging con `window._waDebug`
+  - Retorna mensaje final con variables reemplazadas
+
+- **Actualizada `buildWhatsAppMessage(customMessage, agentName)`** (líneas 189-192):
+  - Ahora acepta `agentName` como segundo parámetro
+  - Usa `replaceMessageVariables()` en lugar de construcción hardcoded
+  - Simplificada de ~15 líneas a 3 líneas
+
+- **Actualizada `openWhatsApp(phone, agentName, customMessage)`** (líneas 292-296):
+  - Usa `buildWhatsAppMessage()` con `agentName`
+  - Eliminada lógica duplicada de construcción de mensaje
+
+- **Actualizado `attachLinkHandlers(agents)`** (línea 486):
+  - Pasa `name` a `buildWhatsAppMessage()` para variable `{AGENT}`
+
+#### `widgetCodeGenerator.optimized.js`
+- **Cambios idénticos a `widgetJsGenerator.js`**:
+  - Función `replaceMessageVariables()` (líneas 151-199)
+  - Actualizada `buildWhatsAppMessage()` (líneas 202-205)
+  - Actualizada `openWhatsApp()` (líneas 305-309)
+  - Actualizado `attachLinkHandlers()` (línea 499)
+
+#### `ConfigSection.jsx`
+- **Nuevo campo "Nombre del sitio"**:
+  - Input para configurar variable `{SITE}`
+  - Placeholder: "Ej: Mi Tienda Online"
+  - Helper text: "Si no se configura, se usará el título de la página"
+
+- **Lista de variables disponibles**:
+  - Muestra debajo del textarea de mensaje
+  - Formato: `<code>{SITE}</code>`, `<code>{TITLE}</code>`, etc.
+  - 7 variables con descripción clara
+
+- **Preview en tiempo real del mensaje**:
+  - Caja con fondo gris mostrando resultado
+  - Reemplaza variables con valores de ejemplo:
+    - `{SITE}` → valor de `siteName` o "Mi Sitio"
+    - `{TITLE}` → "Título de Ejemplo | Mi Sitio"
+    - `{URL}` → "https://ejemplo.com/producto"
+    - `{HREF}` → "https://ejemplo.com/producto?utm_source=google"
+    - `{HASH}` → "#A7K9Q"
+    - `{AGENT}` → "Nombre del Agente"
+    - `{DATE}` → Fecha actual en español
+  - Se actualiza en tiempo real al editar mensaje o siteName
+
+- **Placeholder actualizado**:
+  - Antes: "¡Hola! 👋 Me gustaría obtener más información."
+  - Ahora: "¡Hola! 👋 Estoy en {TITLE} - {URL}"
+
+#### `useConfig.js`
+- **Agregado `siteName: ''` al estado inicial**
+- **Mensaje por defecto actualizado**:
+  - Antes: "¡Hola! 👋 Me gustaría obtener más información."
+  - Ahora: "¡Hola! 👋 Estoy en {TITLE} - {URL}"
+
+#### `staticJsonPublisher.js`
+- **Agregado `siteName` al JSON publicado** (línea 16):
+  - Se incluye en `widgetData.config.siteName`
+  - Se publica junto con `message`, `webhookUrl`, etc.
+
+### 🔧 Modificado
+
+#### Construcción de mensajes (antes vs después)
+
+**Antes** (hardcoded):
+```javascript
+var message = (customMessage || config.message || '¡Hola! 👋');
+message += ' 📄 ' + document.title;
+if (hash) {
+  message += ' 🏷️ Ref: #' + hash;
+}
+message += ' 🔗 ' + getCurrentUrl();
+```
+
+**Ahora** (con variables):
+```javascript
+var message = customMessage || config.message || '¡Hola! 👋 Estoy en {TITLE} - {URL}';
+return replaceMessageVariables(message, agentName);
+```
+
+**Ventajas**:
+- ✅ Usuario controla orden de elementos
+- ✅ Puede omitir elementos no deseados
+- ✅ Puede personalizar formato y emojis
+- ✅ Sintaxis familiar tipo JoinChat
+
+### 📝 Ejemplos de Uso
+
+#### Ejemplo 1: Minimalista
+```javascript
+Config: "Hola, estoy en {URL}"
+Output: "Hola, estoy en https://ejemplo.com/producto"
+```
+
+#### Ejemplo 2: Con agente y fecha
+```javascript
+Config: "Hola {AGENT}, consulta del {DATE} sobre {TITLE}"
+Output: "Hola María González, consulta del 30/12/2025 sobre Producto Premium | Mi Tienda"
+```
+
+#### Ejemplo 3: Completo con tracking
+```javascript
+Config: "👋 {AGENT} | {TITLE} | Ref: {HASH} | {DATE}"
+Output: "👋 María González | Producto Premium | Ref: #A7K9Q | 30/12/2025"
+```
+
+#### Ejemplo 4: Solo nombre del sitio
+```javascript
+Config: "Consulta desde {SITE}"
+siteName: "Tienda ABC"
+Output: "Consulta desde Tienda ABC"
+```
+
+#### Ejemplo 5: URL completa vs limpia
+```javascript
+Config: "Original: {HREF} | Limpia: {URL}"
+URL visitada: https://ejemplo.com/producto?utm_source=google&gclid=123
+Output: "Original: https://ejemplo.com/producto?utm_source=google&gclid=123 | Limpia: https://ejemplo.com/producto"
+```
+
+### 💡 Mejora Arquitectónica
+
+**Problema identificado**:
+- Mensajes tenían orden fijo: mensaje → título → hash → URL
+- No se podían omitir elementos (siempre incluía título y URL)
+- Emojis hardcoded (📄 🏷️ 🔗)
+- Formato no personalizable
+
+**Solución implementada**:
+- Sistema de variables dinámicas estilo JoinChat
+- Usuario controla completamente el mensaje
+- Preview en tiempo real para validar
+- Backwards compatible (mensajes antiguos sin variables funcionan igual)
+
+### 🔮 Próximos Pasos (Tier 2)
+
+Variables planificadas para próxima iteración:
+- **`{GCLID}`**: Google Click ID completo (no solo hash)
+- **`{UTM_SOURCE}`**: Origen del tráfico (google, facebook, etc.)
+- **`{DEVICE}`**: Tipo de dispositivo (Móvil o Escritorio)
+
+Variables Tier 3 (avanzadas):
+- **`{TIME}`**: Hora actual
+- **`{UTM_MEDIUM}`**, **`{UTM_CAMPAIGN}`**: Más parámetros UTM
+- **`{BROWSER}`**: Navegador del usuario
+
+---
+
 ## [2025-12-29] - Scripts de Actualización Masiva de Widgets
 
 ### 🆕 Agregado
@@ -431,5 +601,5 @@ Este proyecto no usa versionado semántico formal, pero sigue estos principios:
 
 ---
 
-**Última actualización**: 2025-12-28
+**Última actualización**: 2025-12-30
 **Mantenido por**: Equipo de desarrollo WhatsApp Admin Panel

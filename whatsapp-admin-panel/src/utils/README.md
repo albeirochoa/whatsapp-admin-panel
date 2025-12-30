@@ -213,14 +213,47 @@ if (document.readyState === 'loading') {
 - `getShortHash(str)`: Genera hash de 5 caracteres (ej: "3KL0P")
 - Persiste en cookies `_gcl_aw`, `_gcl_hash` (90 días)
 
-#### 2. Construcción de Mensajes
-- `buildWhatsAppMessage(customMessage)`:
-  - Mensaje base (custom o config)
-  - Agrega título de página: `📄 {title}`
-  - Agrega ref si hay hash: `🏷️ Ref: #{hash}`
-  - Agrega URL limpia: `🔗 {url}`
+#### 2. Construcción de Mensajes con Variables Dinámicas
+
+**Sistema de Variables (Tier 1)**:
+- **`{SITE}`**: Nombre del sitio (config.siteName o auto desde document.title)
+- **`{TITLE}`**: Título de la página actual
+- **`{URL}`**: URL limpia (sin parámetros de tracking)
+- **`{HREF}`**: URL completa (con todos los parámetros)
+- **`{HASH}`**: Hash de referencia del gclid (ej: #A7K9Q)
+- **`{AGENT}`**: Nombre del agente seleccionado
+- **`{DATE}`**: Fecha actual (DD/MM/YYYY)
+
+**Funciones**:
+- `replaceMessageVariables(template, agentName)`:
+  - Recibe mensaje con variables tipo `{VARIABLE}`
+  - Obtiene valores dinámicos del navegador
+  - Reemplaza todas las ocurrencias de variables
+  - Retorna mensaje final procesado
+
+- `buildWhatsAppMessage(customMessage, agentName)`:
+  - Usa `replaceMessageVariables()` para procesar template
+  - Soporta mensaje personalizado por enlace
+  - Debug logging con `window._waDebug`
 
 - `getCurrentUrl()`: Limpia URL de parámetros de tracking (gclid, utm_*, fbclid)
+
+**Ejemplos**:
+```javascript
+// Usuario configura:
+message: "Hola {AGENT}, consulta sobre {TITLE} - {URL}"
+
+// Output final:
+"Hola María González, consulta sobre Producto Premium | Tienda - https://ejemplo.com/producto"
+
+// Minimalista:
+message: "{URL}"
+// Output: "https://ejemplo.com/producto"
+
+// Completo:
+message: "{AGENT} | {DATE} | {TITLE} | Ref: {HASH}"
+// Output: "María González | 30/12/2025 | Producto Premium | Ref: #A7K9Q"
+```
 
 #### 3. Apertura de WhatsApp
 - `openWhatsApp(phone, agentName, customMessage)`:
@@ -585,5 +618,5 @@ Ver [scripts/README.md](../../scripts/README.md) para:
 
 ---
 
-**Última actualización**: 2025-12-29
+**Última actualización**: 2025-12-30
 **Versión de arquitectura**: ARQUITECTURA.md - 2025-12-20
