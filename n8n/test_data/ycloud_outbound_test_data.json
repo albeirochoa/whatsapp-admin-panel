@@ -1,0 +1,212 @@
+[
+    {
+        "description": "C1 - Outbound (Force Delivered)",
+        "params": {
+            "project_id": "test-color-tapetes"
+        },
+        "body": {
+            "type": "whatsapp.message.updated",
+            "id": "evt_out_101",
+            "whatsappMessage": {
+                "id": "yw_out_101",
+                "from": "+573123725256",
+                "to": "+573001000001",
+                "type": "text",
+                "status": "delivered",
+                "text": {
+                    "body": "Cuesta $1.2M."
+                },
+                "sendTime": "2025-12-19T08:04:00Z"
+            }
+        }
+    },
+    {
+        "description": "C2 - Outbound (Force Delivered)",
+        "params": {
+            "project_id": "test-color-tapetes"
+        },
+        "body": {
+            "type": "whatsapp.message.updated",
+            "id": "evt_out_102",
+            "whatsappMessage": {
+                "id": "yw_out_102",
+                "from": "+573123725256",
+                "to": "+573001000002",
+                "type": "text",
+                "status": "delivered",
+                "text": {
+                    "body": "Mide 2x3m."
+                },
+                "sendTime": "2025-12-19T08:20:00Z"
+            }
+        }
+    },
+    {
+        "description": "C3 - Outbound (Force Delivered)",
+        "params": {
+            "project_id": "test-color-tapetes"
+        },
+        "body": {
+            "type": "whatsapp.message.updated",
+            "id": "evt_out_103",
+            "whatsappMessage": {
+                "id": "yw_out_103",
+                "from": "+573123725256",
+                "to": "+573001000003",
+                "type": "text",
+                "status": "delivered",
+                "text": {
+                    "body": "Calle 109 #15-20."
+                },
+                "sendTime": "2025-12-19T08:35:00Z"
+            }
+        }
+    },
+    {
+        "description": "C4 - Outbound (Force Delivered)",
+        "params": {
+            "project_id": "test-color-tapetes"
+        },
+        "body": {
+            "type": "whatsapp.message.updated",
+            "id": "evt_out_104",
+            "whatsappMessage": {
+                "id": "yw_out_104",
+                "from": "+573123725256",
+                "to": "+573001000004",
+                "type": "text",
+                "status": "delivered",
+                "text": {
+                    "body": "Link de pago enviado."
+                },
+                "sendTime": "2025-12-19T08:50:00Z"
+            }
+        }
+    },
+    {
+        "description": "C5 - Outbound (Force Delivered)",
+        "params": {
+            "project_id": "test-color-tapetes"
+        },
+        "body": {
+            "type": "whatsapp.message.updated",
+            "id": "evt_out_105",
+            "whatsappMessage": {
+                "id": "yw_out_105",
+                "from": "+573123725256",
+                "to": "+573001000005",
+                "type": "text",
+                "status": "delivered",
+                "text": {
+                    "body": "Sí, disponible."
+                },
+                "sendTime": "2025-12-19T09:05:00Z"
+            }
+        }
+    },
+    {
+        "description": "C6 - Outbound (Force Delivered)",
+        "params": {
+            "project_id": "test-color-tapetes"
+        },
+        "body": {
+            "type": "whatsapp.message.updated",
+            "id": "evt_out_106",
+            "whatsappMessage": {
+                "id": "yw_out_106",
+                "from": "+573123725256",
+                "to": "+573001000006",
+                "type": "text",
+                "status": "delivered",
+                "text": {
+                    "body": "Sí, abrimos domingos."
+                },
+                "sendTime": "2025-12-19T09:20:00Z"
+            }
+        }
+    },
+    {
+        "description": "C7 - Outbound (Force Delivered)",
+        "params": {
+            "project_id": "test-color-tapetes"
+        },
+        "body": {
+            "type": "whatsapp.message.updated",
+            "id": "evt_out_107",
+            "whatsappMessage": {
+                "id": "yw_out_107",
+                "from": "+573123725256",
+                "to": "+573001000007",
+                "type": "text",
+                "status": "delivered",
+                "text": {
+                    "body": "Gestionando cambio."
+                },
+                "sendTime": "2025-12-19T09:35:00Z"
+            }
+        }
+    },
+    {
+        "description": "C8 - Outbound (Force Delivered)",
+        "params": {
+            "project_id": "test-color-tapetes"
+        },
+        "body": {
+            "type": "whatsapp.message.updated",
+            "id": "evt_out_108",
+            "whatsappMessage": {
+                "id": "yw_out_108",
+                "from": "+573123725256",
+                "to": "+573001000008",
+                "type": "text",
+                "status": "delivered",
+                "text": {
+                    "body": "Tarda 15 días."
+                },
+                "sendTime": "2025-12-19T09:50:00Z"
+            }
+        }
+    },
+    {
+        "description": "C9 - Outbound (Force Delivered)",
+        "params": {
+            "project_id": "test-color-tapetes"
+        },
+        "body": {
+            "type": "whatsapp.message.updated",
+            "id": "evt_out_109",
+            "whatsappMessage": {
+                "id": "yw_out_109",
+                "from": "+573123725256",
+                "to": "+573001000009",
+                "type": "text",
+                "status": "delivered",
+                "text": {
+                    "body": "Agua y jabón suave."
+                },
+                "sendTime": "2025-12-19T10:05:00Z"
+            }
+        }
+    },
+    {
+        "description": "C10 - Outbound (Force Delivered)",
+        "params": {
+            "project_id": "test-color-tapetes"
+        },
+        "body": {
+            "type": "whatsapp.message.updated",
+            "id": "evt_out_110",
+            "whatsappMessage": {
+                "id": "yw_out_110",
+                "from": "+573123725256",
+                "to": "+573001000010",
+                "type": "text",
+                "status": "delivered",
+                "text": {
+                    "body": "Te recomiendo grises."
+                },
+                "sendTime": "2025-12-19T10:20:00Z"
+            }
+        }
+    }
+]

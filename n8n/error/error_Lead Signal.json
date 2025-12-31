@@ -1,0 +1,241 @@
+{
+  "name": "Konversion Web Lead Signal",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "8c0d6565-94b8-4459-95ac-fc92233e9f3c",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -64,
+        16
+      ],
+      "id": "834bcbde-c1e1-47cb-847d-47590a576a8f",
+      "name": "Webhook",
+      "webhookId": "8c0d6565-94b8-4459-95ac-fc92233e9f3c"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1lvM3HHcbfv1hWpatJUs5QvITS4QsQB7SXUIfm9ERCSI",
+          "mode": "list",
+          "cachedResultName": "N8N Sistema_Conversiones_WhatsApp",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1lvM3HHcbfv1hWpatJUs5QvITS4QsQB7SXUIfm9ERCSI/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 86924823,
+          "mode": "list",
+          "cachedResultName": "clicks",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1lvM3HHcbfv1hWpatJUs5QvITS4QsQB7SXUIfm9ERCSI/edit#gid=86924823"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "gclid": "={{ $json.body.gclid }}",
+            "gclid_hash": "={{ $json.body.gclid_hash }}",
+            "whatsapp_business_phone": "={{ $json.body.phone_e164 }}",
+            "first_click_time_iso": "={{ $json.body.first_click_time_iso }}",
+            "landing_url": "={{ $json.body.landing_url }}",
+            "source": "={{$json.body.source ?? $json.headers?.origin ?? $json.headers?.referer ?? 'unknown'}}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "gclid",
+              "displayName": "gclid",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "whatsapp_business_phone",
+              "displayName": "whatsapp_business_phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "first_click_time_iso",
+              "displayName": "first_click_time_iso",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "landing_url",
+              "displayName": "landing_url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "source",
+              "displayName": "source",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "gclid_hash",
+              "displayName": "gclid_hash",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        848,
+        -32
+      ],
+      "id": "3a64fce8-6503-42d0-a0fe-d5bf35c67e68",
+      "name": "Append row in sheet"
+    },
+    {
+      "parameters": {
+        "jsCode": "let body = $json.body;\n\n// Si viene como string, lo convertimos a objeto\nif (typeof body === 'string') {\n  try {\n    body = JSON.parse(body);\n  } catch (e) {\n    // Si falla, deja un error visible para depurar\n    return [{ ...$json, parsed_error: 'Body is not valid JSON', raw_body: $json.body }];\n  }\n}\n\n// Deja el body ya parseado y además crea campos planos (más fácil de mapear)\nreturn [{\n  ...$json,\n  body,\n  gclid: body.gclid ?? null,\n  gclid_hash: body.gclid_hash ?? null,\n  phone_e164: body.phone_e164 ?? null,\n  agent_selected: body.agent_selected ?? null,\n  first_click_time_iso: body.first_click_time_iso ?? null,\n  landing_url: body.landing_url ?? null,\n  page_title: body.page_title ?? null,\n  user_agent: body.user_agent ?? null,\n  device_type: body.device_type ?? null,\n  project_id: body.project_id ?? null,\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        192,
+        -80
+      ],
+      "id": "214bbb4e-856f-48aa-a0f0-8a956b9e3e18",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "const crypto = require('crypto');\n\n// Obtener datos del nodo anterior\nconst body = $input.first().json.body;\nconst project_id = body.project_id || 'konversion-web';\nconst phone_e164 = body.phone_e164;\nconst gclid = body.gclid;\nconst gclid_hash = body.gclid_hash;\nconst landing_url = body.landing_url;\nconst first_click_time_iso = body.first_click_time_iso;\n\n// Generar event_id único\nconst event_id = crypto.randomUUID();\n\n// Generar timestamp actual si no viene\nconst ts = first_click_time_iso || new Date().toISOString();\nconst created_at = new Date().toISOString();\n\n// Preparar query con valores escapados\nconst query = `\n  INSERT INTO events (\n    event_id,\n    project_id,\n    event_type,\n    phone_e164,\n    ts,\n    click_id,\n    click_id_type,\n    click_id_hash,\n    landing_url,\n    traffic_source,\n    payload_raw,\n    created_at\n  ) VALUES (\n    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12\n  )\n  ON CONFLICT (event_id) DO NOTHING\n  RETURNING event_id;\n`;\n\n// Preparar parámetros\nconst params = [\n  event_id,\n  project_id,\n  'click',\n  phone_e164,\n  ts,\n  gclid,\n  'gclid',\n  gclid_hash,\n  landing_url || null,\n  'google_ads',\n  JSON.stringify(body),\n  created_at\n];\n\n// Retornar query y params para el nodo Postgres\nreturn {\n  query,\n  params,\n  // Pasar todos los datos originales para el nodo de Sheets\n  ...body\n};",
+        "options": {
+          "queryReplacement": "==[$crypto.randomUUID(), $json.project_id || 'konversion-web', 'click', $json.phone_e164, $now.toISO(), $json.gclid, 'gclid', $json.gclid_hash, $json.landing_url, 'google_ads', JSON.stringify($json.body), $now.toISO()]"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        400,
+        -80
+      ],
+      "id": "929686a5-8aec-4833-9575-24dc275e48b2",
+      "name": "Execute a SQL query",
+      "credentials": {
+        "postgres": {
+          "id": "8YJV6aXkwW8GDwrM",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "={{ $json.query }}",
+        "options": {
+          "queryReplacement": "=={{ $json.params }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        608,
+        -80
+      ],
+      "id": "871b05ad-4b99-44ec-9fe3-fc23ebc778c1",
+      "name": "Execute a SQL query1",
+      "credentials": {
+        "postgres": {
+          "id": "8YJV6aXkwW8GDwrM",
+          "name": "Postgres account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append row in sheet": {
+      "main": [
+        []
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Execute a SQL query",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute a SQL query": {
+      "main": [
+        [
+          {
+            "node": "Execute a SQL query1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute a SQL query1": {
+      "main": [
+        [
+          {
+            "node": "Append row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "7a5f3f0d-3275-409f-bfba-09d36a79f7d8",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "9f13993b16e067a82e6fa160e42190313629bb8b43c55648e41e8daa553c28a9"
+  },
+  "id": "TeGZOV11ZarEtrBN",
+  "tags": []
+}

@@ -1,0 +1,172 @@
+[
+    {
+        "description": "C1 - Google Ads - Alta Calidad",
+        "params": {
+            "project_id": "test-color-tapetes"
+        },
+        "body": {
+            "phone_e164": "+573001000001",
+            "gclid": "CkQ1_TestGCLID001",
+            "gclid_hash": "AAA01",
+            "landing_url": "https://colortapetes.com/producto/alfombra-persa?gclid=CkQ1_TestGCLID001",
+            "source": "google_ads",
+            "agent_selected": "Ligia Vargas",
+            "page_title": "Alfombra Persa Premium",
+            "user_agent": "Mobile",
+            "device_type": "mobile",
+            "first_click_time_iso": "2025-12-19T08:00:00Z"
+        }
+    },
+    {
+        "description": "C2 - Facebook Ads - Media Calidad",
+        "params": {
+            "project_id": "test-color-tapetes"
+        },
+        "body": {
+            "phone_e164": "+573001000002",
+            "fbclid": "IwAR_TestFBCLID002",
+            "gclid_hash": "BBB02",
+            "landing_url": "https://colortapetes.com/coleccion-moderna?fbclid=IwAR_TestFBCLID002",
+            "source": "facebook_ads",
+            "agent_selected": "Camilo Torres",
+            "page_title": "Colección Moderna",
+            "user_agent": "Mobile",
+            "device_type": "mobile",
+            "first_click_time_iso": "2025-12-19T08:15:00Z"
+        }
+    },
+    {
+        "description": "C3 - Orgánico - Baja Calidad",
+        "params": {
+            "project_id": "test-color-tapetes"
+        },
+        "body": {
+            "phone_e164": "+573001000003",
+            "landing_url": "https://colortapetes.com/contacto",
+            "source": "organic",
+            "agent_selected": "Ligia Vargas",
+            "page_title": "Contacto",
+            "user_agent": "Desktop",
+            "device_type": "desktop",
+            "first_click_time_iso": "2025-12-19T08:30:00Z"
+        }
+    },
+    {
+        "description": "C4 - Instagram - Alta Calidad",
+        "params": {
+            "project_id": "test-color-tapetes"
+        },
+        "body": {
+            "phone_e164": "+573001000004",
+            "landing_url": "https://colortapetes.com/tapete-infantil",
+            "source": "instagram",
+            "agent_selected": "Ana Maria",
+            "page_title": "Tapetes Infantiles",
+            "user_agent": "Mobile",
+            "device_type": "mobile",
+            "first_click_time_iso": "2025-12-19T08:45:00Z"
+        }
+    },
+    {
+        "description": "C5 - Google Ads - Alta Calidad",
+        "params": {
+            "project_id": "test-color-tapetes"
+        },
+        "body": {
+            "phone_e164": "+573001000005",
+            "gclid": "CkQ1_TestGCLID005",
+            "gclid_hash": "CCC05",
+            "landing_url": "https://colortapetes.com/ofertas",
+            "source": "google_ads",
+            "agent_selected": "Ligia Vargas",
+            "page_title": "Ofertas",
+            "user_agent": "Desktop",
+            "device_type": "desktop",
+            "first_click_time_iso": "2025-12-19T09:00:00Z"
+        }
+    },
+    {
+        "description": "C6 - Directo - Media Calidad",
+        "params": {
+            "project_id": "test-color-tapetes"
+        },
+        "body": {
+            "phone_e164": "+573001000006",
+            "landing_url": "https://colortapetes.com/",
+            "source": "direct",
+            "agent_selected": "Camilo Torres",
+            "page_title": "Inicio",
+            "user_agent": "Mobile",
+            "device_type": "mobile",
+            "first_click_time_iso": "2025-12-19T09:15:00Z"
+        }
+    },
+    {
+        "description": "C7 - Facebook Ads - Baja Calidad",
+        "params": {
+            "project_id": "test-color-tapetes"
+        },
+        "body": {
+            "phone_e164": "+573001000007",
+            "fbclid": "IwAR_TestFBCLID007",
+            "gclid_hash": "DDD07",
+            "landing_url": "https://colortapetes.com/garantia",
+            "source": "facebook_ads",
+            "agent_selected": "Ana Maria",
+            "page_title": "Garantía",
+            "user_agent": "Mobile",
+            "device_type": "mobile",
+            "first_click_time_iso": "2025-12-19T09:30:00Z"
+        }
+    },
+    {
+        "description": "C8 - Google Ads - Alta Calidad",
+        "params": {
+            "project_id": "test-color-tapetes"
+        },
+        "body": {
+            "phone_e164": "+573001000008",
+            "gclid": "CkQ1_TestGCLID008",
+            "gclid_hash": "EEE08",
+            "landing_url": "https://colortapetes.com/personalizados",
+            "source": "google_ads",
+            "agent_selected": "Ligia Vargas",
+            "page_title": "Personalizados",
+            "user_agent": "Desktop",
+            "device_type": "desktop",
+            "first_click_time_iso": "2025-12-19T09:45:00Z"
+        }
+    },
+    {
+        "description": "C9 - Orgánico - Media Calidad",
+        "params": {
+            "project_id": "test-color-tapetes"
+        },
+        "body": {
+            "phone_e164": "+573001000009",
+            "landing_url": "https://colortapetes.com/blog",
+            "source": "organic",
+            "agent_selected": "Camilo Torres",
+            "page_title": "Blog",
+            "user_agent": "Mobile",
+            "device_type": "mobile",
+            "first_click_time_iso": "2025-12-19T10:00:00Z"
+        }
+    },
+    {
+        "description": "C10 - Instagram - Alta Calidad",
+        "params": {
+            "project_id": "test-color-tapetes"
+        },
+        "body": {
+            "phone_e164": "+573001000010",
+            "landing_url": "https://colortapetes.com/servicios",
+            "source": "instagram",
+            "agent_selected": "Ana Maria",
+            "page_title": "Servicios",
+            "user_agent": "Mobile",
+            "device_type": "mobile",
+            "first_click_time_iso": "2025-12-19T10:15:00Z"
+        }
+    }
+]

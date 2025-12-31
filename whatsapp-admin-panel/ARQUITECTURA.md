@@ -1,13 +1,14 @@
 # Arquitectura del Proyecto - WhatsApp Admin Panel
 
-## Actualización 2025-12-20 (estado real + planes inmediatos)
+## Actualización 2025-12-31 (estado real + planes inmediatos)
 
-- **Workflow 3 (AI Classification)** ya usa: batch de 500 eventos, agrupación por `project_id + phone_e164`, `Find Click` con ventana dinámica `click_matching_window_days` (hash o fallback por teléfono), merge manual de clicks (left join) y `Merge Branches` antes de OpenAI para mantener índices estables. No incluye flujo de retry/error en BASIC.
+- **Workflow 3 (AI Classification)** ya usa: batch de 500 eventos, agrupación por `project_id + phone_e164`, `Find Click` con ventana dinámica `click_matching_window_days` (match exacto por **hash**), merge manual de clicks (left join) y `Merge Branches` antes de OpenAI para mantener índices estables. Incluye generación de hashes SHA-256 para Enhanced Conversions.
 - **Dedupe de conversiones:** `ON CONFLICT (external_attrib_id) DO UPDATE` actualiza la conversión existente solo si el nuevo `ai_label` es igual o mayor (progresión de funnel).
+- **Enhanced Conversions:** El flujo parsea emails/nombres detectados por la IA y genera `email_sha256` y `phone_sha256` usando una implementación pura de JS.
+- **Valores Dinámicos:** La IA puede detectar montos de venta específicos que sobrescriben el valor estático de la configuración.
+- **BD `events`:** incluye `lead_name`, `retry_count INTEGER DEFAULT 0` y `error_message TEXT`.
+- **Sincronización Panel → n8n:** Webhook en n8n con header `x-api-key`, hace UPSERT en `clients_config` con el payload del panel.
 - **Atribución persistente:** `lead_attribution` se actualiza con `click_matching_window_days` por cliente.
-- **BD `events`:** incluye `retry_count INTEGER DEFAULT 0` y `error_message TEXT`.
-- **Próximo “Workflow 0” (sync Panel → n8n):** Webhook en n8n con header `x-api-key`, hace UPSERT en `clients_config` con el payload del panel. El panel enviará `project_id`, prompt, conversion_config, openai*, click_matching_window_days, message_limit_per_conversation, sheets, etc.
-- **Panel (Firebase/React):** Los agentes (subcolección `agents`) permiten múltiples números por cliente; al publicar (`saveConfig`) se lee toda la lista de agentes y se publica en Storage. En la sync hacia n8n se deberá enviar el `phone_filter` principal (o la lista de teléfonos si se decide soportar varios).
 
 ## Flujo de Datos y Componentes
 
@@ -41,6 +42,7 @@
 │  │  • useProjects(user)  → CRUD proyectos              │  │
 │  │  • useAgents(user, selectedProject)  → CRUD agentes │  │
 │  │  • useConfig(user, selectedProject)  → Config       │  │
+│  │  • useConversions(selectedProject)  → Conversiones  │  │
 │  └─────────────────────────────────────────────────────┘  │
 │                                                             │
 │  ┌─────────────┐  ┌──────────────────────────────────┐   │
@@ -50,12 +52,17 @@
 │  │  - Logout   │  │  │ Sidebar  │  │ Content Area │  │   │
 │  └─────────────┘  │  │          │  │              │  │   │
 │                   │  │ Projects │  │ ┌──────────┐ │  │   │
-│  ┌─────────────┐  │  │  List    │  │ │ Config   │ │  │   │
+│  ┌─────────────┐  │  │  List    │  │ │ Monitor  │ │  │   │
 │  │   Modals    │  │  │          │  │ │ Section  │ │  │   │
 │  │             │  │  │ + New    │  │ └──────────┘ │  │   │
 │  │ • Project   │  │  │ Project  │  │              │  │   │
 │  │ • Agent     │  │  └──────────┘  │ ┌──────────┐ │  │   │
-│  └─────────────┘  │                │ │ Agents   │ │  │   │
+│  └─────────────┘  │                │ │ Config   │ │  │   │
+│                   │                │ │ Section  │ │  │   │
+│                   │                │ └──────────┘ │  │   │
+│                   │                │              │  │   │
+│                   │                │ ┌──────────┐ │  │   │
+│                   │                │ │ Agents   │ │  │   │
 │                   │                │ │ Section  │ │  │   │
 │                   │                │ └──────────┘ │  │   │
 │                   │                │              │  │   │
@@ -184,7 +191,8 @@
 **Responsabilidad:** Lógica de negocio + integración Firestore
 - useProjects: Gestión de proyectos
 - useAgents: Gestión de agentes
-- useConfig: Configuración del widget
+- useConfig: Configuración del widget + sincronización n8n
+- useConversions: Monitoreo en tiempo real de conversiones
 
 ### 🎨 Components
 **Responsabilidad:** Renderizado UI puro
@@ -971,12 +979,13 @@ RETURNING event_id;
 
 ##### **6. Find Click** (Postgres Query)
 - **Tipo:** `n8n-nodes-base.postgres`
-- **Funcion:** Busca click previo al primer mensaje (hash primero, fallback por `business_phone_e164`).
+- **Funcion:** Busca click previo al primer mensaje usando exclusivamente el **hash** para máxima precisión.
 - **Query SQL:**
   ```sql
   SELECT
     $1::text as project_id,
-    $2::text as phone_e164,
+    $2::text as customer_phone_e164,
+    $3::text as business_phone_e164,
     event_id as click_event_id,
     click_id,
     click_id_type,
@@ -985,19 +994,15 @@ RETURNING event_id;
     landing_url
   FROM events
   WHERE project_id = $1
-    AND (
-      (click_id_hash = $4 AND click_id_hash IS NOT NULL)
-      OR phone_e164 = $2
-    )
+    AND click_id_hash = $5
+    AND $5 IS NOT NULL
     AND event_type = 'click'
-    AND ts < $3
-    AND ts >= NOW() - ($5 || ' days')::interval
-  ORDER BY
-    CASE WHEN click_id_hash = $4 THEN 0 ELSE 1 END,
-    ts DESC
+    AND ts < $4
+    AND ts >= NOW() - ($6 || ' days')::interval
+  ORDER BY ts DESC
   LIMIT 1;
   ```
-- **Nota:** `alwaysOutputData = true`
+- **Nota:** `alwaysOutputData = true` con left join manual garantiza que no se pierdan conversiones orgánicas.
 
 ##### **7. Merge Click Data** (Code node)
 - **Tipo:** `n8n-nodes-base.code`
@@ -1050,17 +1055,22 @@ RETURNING event_id;
 
 ##### **14. Parse AI Response** (Code node)
 - **Funcion:**
-  - Parsea JSON de OpenAI
-  - Defaults y validacion de label con `conversion_config`
-  - Genera `conversion_id` y `external_attrib_id`
-  - Define `attribution_method` segun `click_data`
-  - Ahora retorna tambien `business_phone_e164` (de la conversacion o del click) y `customer_phone_e164` (cliente) para que lleguen a Sheets
+  - Parsea JSON de OpenAI.
+  - Defaults y validacion de label con `conversion_config`.
+  - **Valor Dinámico:** Si la IA detecta un monto de venta en la conversación, lo usa como `conversion_value` sobreescribiendo el estático.
+  - **Identificación de Leads:** Extrae `lead_name` y `lead_email` del contenido si están disponibles.
+  - Genera `conversion_id` y `external_attrib_id`.
+  - Define `attribution_method` según `click_data`.
+  - Retorna `business_phone_e164` y `customer_phone_e164` para trazabilidad completa.
 
 ##### **15. Save Conversion** (Postgres Query)
-- **Funcion:** Inserta/actualiza por `external_attrib_id` con progresion de label
+- **Funcion:** Inserta/actualiza por `external_attrib_id` con progresión de label.
+- **Enhanced Conversions:** Almacena `lead_email` y `lead_name` (texto plano) además de las versiones hasheadas (`email_sha256`, `phone_sha256`).
 - **Query SQL:**
   ```sql
-  INSERT INTO conversions (...)
+  INSERT INTO conversions (
+    ..., lead_email, email_sha256, phone_sha256, lead_name, ...
+  ) VALUES (...)
   ON CONFLICT (external_attrib_id) DO UPDATE SET
     ai_label = EXCLUDED.ai_label,
     ai_confidence = EXCLUDED.ai_confidence,
@@ -1070,6 +1080,10 @@ RETURNING event_id;
     aggregated_conversation = EXCLUDED.aggregated_conversation,
     message_count = EXCLUDED.message_count,
     last_message_ts = EXCLUDED.last_message_ts,
+    lead_email = EXCLUDED.lead_email,
+    email_sha256 = EXCLUDED.email_sha256,
+    phone_sha256 = EXCLUDED.phone_sha256,
+    lead_name = EXCLUDED.lead_name,
     updated_at = NOW()
   WHERE conversions.ai_label <= EXCLUDED.ai_label
   RETURNING conversion_id;
@@ -1089,11 +1103,12 @@ RETURNING event_id;
 
 ##### **18. Prepare for Sheets** (Code node)
 - **Funcion:** Reusa datos de `Parse AI Response` y agrega `sheet_spreadsheet_id`/`sheet_name`.
+- **SHA-256 Hashing:** Implementación pura de JS para hashear `phone_e164` y `lead_email` (SHA-256) antes de enviar a Sheets, necesario para **Google Ads Enhanced Conversions**.
 
 ##### **19. Upsert to Sheets** (Google Sheets)
 - **Operacion:** `appendOrUpdate`
 - **Match:** `external_attrib_id`
-- **Columnas:** Click ID, Conversion Name, Conversion Time, Conversion Value, Conversion Currency, phone_e164, ai_reason, ai_confidence, external_attrib_id
+- **Columnas:** Click ID, Conversion Name, Conversion Time, Conversion Value, Conversion Currency, phone_e164, ai_reason, ai_confidence, lead_name, lead_email, email_sha256, phone_sha256, external_attrib_id.
 
 ##### **20. No Messages** (NoOp)
 - **Funcion:** Termina el flujo cuando no hay mensajes pendientes.
@@ -1208,18 +1223,253 @@ CjwKCAiA0eTJ...,whatsapp_lead,2025-12-16 15:30:00,50
 #### **Workflow 3 - AI Classification:**
 6. **Batch real en SQL**: el BASIC usa `LIMIT 500` y ordena por `project_id, phone_e164, ts`. No hay `ROW_NUMBER` ni reparto justo.
 
-7. **Find Click con fallback por teléfono**: busca por `click_id_hash` o `phone_e164` dentro de `click_matching_window_days`. Si no hay click, la conversión queda `organic`.
+7. **Find Click Exacto**: Se eliminó el fallback por teléfono en la query de SQL para Workflow 3 para evitar atribuciones erróneas en tráfico orgánico masivo, priorizando el `click_id_hash`.
 
 8. **Merge Click Data runOnceForAllItems**: el left join manual evita perder conversaciones cuando `Find Click` devuelve 0 filas.
 
 9. **Merge Branches antes de OpenAI**: une las dos salidas de `Has Click Hash?` para mantener índices estables en `Parse AI Response`.
 
-10. **alwaysOutputData en Find Click**: ayuda a que el nodo no corte el flujo en escenarios orgánicos.
+10. **Enhanced Conversions y Hashing**: n8n no tiene módulo `crypto` nativo accesible en nodos Code básicos; se implementó una función `sha256` pura en JS para procesar datos de clientes antes de ir a Sheets.
 
 11. **Rate limiting**: 500 ms por conversación en `Process Conversation`.
 
 12. **Atribución persistente**: `lead_attribution` se actualiza cuando hay `click_id_hash` (mensaje o stored), con expiración configurable por cliente.
 
+---
+
+## Dashboard de Conversiones en Tiempo Real
+
+### Objetivo
+Proporcionar visibilidad en tiempo real de las conversiones clasificadas por IA directamente en el Admin Panel, permitiendo a los usuarios monitorear el rendimiento de sus campañas sin necesidad de acceder a Google Sheets o PostgreSQL.
+
+### Arquitectura del Sistema
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                   n8n Workflow 3 (AI Classification)             │
+│                                                                  │
+│  ┌────────────────────────────────────────────────────────┐    │
+│  │  Save Conversion (PostgreSQL)                          │    │
+│  │  INSERT INTO conversions (...)                         │    │
+│  └────────────────────┬───────────────────────────────────┘    │
+│                       │                                          │
+│                       ▼                                          │
+│  ┌────────────────────────────────────────────────────────┐    │
+│  │  Sync to Firestore (HTTP Request)                      │    │
+│  │  POST /v1/projects/whatsapp-widget-admin/              │    │
+│  │       databases/(default)/documents/conversions        │    │
+│  │                                                         │    │
+│  │  Payload (REST API format):                            │    │
+│  │  {                                                      │    │
+│  │    "fields": {                                          │    │
+│  │      "project_id": { "stringValue": "..." },           │    │
+│  │      "conversion_name": { "stringValue": "..." },      │    │
+│  │      "conversion_value": { "doubleValue": 0 },         │    │
+│  │      "phone_e164": { "stringValue": "..." },           │    │
+│  │      "lead_email": { "stringValue": "..." },           │    │
+│  │      "lead_name": { "stringValue": "..." },            │    │
+│  │      "ai_reason": { "stringValue": "..." },            │    │
+│  │      "ai_confidence": { "doubleValue": 0 },            │    │
+│  │      "created_at": { "timestampValue": "..." }         │    │
+│  │    }                                                    │    │
+│  │  }                                                      │    │
+│  └────────────────────┬───────────────────────────────────┘    │
+└────────────────────────┼──────────────────────────────────────────┘
+                         │
+                         ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    Firebase Firestore                            │
+│                                                                  │
+│  Collection: /conversions                                        │
+│  ┌────────────────────────────────────────────────────────┐    │
+│  │  Document: {conversion_id}                             │    │
+│  │  {                                                      │    │
+│  │    project_id: "HMR9Z75xI0PYxEYStK1l",                 │    │
+│  │    conversion_name: "sale",                            │    │
+│  │    conversion_value: 150000,                           │    │
+│  │    phone_e164: "+573123456789",                        │    │
+│  │    lead_email: "cliente@example.com",                  │    │
+│  │    lead_name: "Juan Pérez",                            │    │
+│  │    ai_reason: "Cliente confirmó compra",               │    │
+│  │    ai_confidence: 0.95,                                │    │
+│  │    created_at: "2025-12-31T10:30:00Z"                  │    │
+│  │  }                                                      │    │
+│  └────────────────────────────────────────────────────────┘    │
+└────────────────────────┬────────────────────────────────────────┘
+                         │
+                         │ onSnapshot (real-time listener)
+                         ▼
+┌─────────────────────────────────────────────────────────────────┐
+│              React Admin Panel (Firebase Hosting)                │
+│                                                                  │
+│  ┌────────────────────────────────────────────────────────┐    │
+│  │  useConversions.js (Custom Hook)                       │    │
+│  │                                                         │    │
+│  │  Query:                                                 │    │
+│  │  - where('project_id', '==', selectedProject.id)       │    │
+│  │  - orderBy('created_at', 'desc')                       │    │
+│  │  - limit(50)                                            │    │
+│  │                                                         │    │
+│  │  Returns:                                               │    │
+│  │  - conversions[] (últimas 50)                          │    │
+│  │  - stats { totalCount, totalValue, todayCount }        │    │
+│  │  - loading (boolean)                                    │    │
+│  └────────────────────┬───────────────────────────────────┘    │
+│                       │                                          │
+│                       ▼                                          │
+│  ┌────────────────────────────────────────────────────────┐    │
+│  │  MonitoringSection.jsx (UI Component)                  │    │
+│  │                                                         │    │
+│  │  ┌──────────────────────────────────────────────┐     │    │
+│  │  │  KPI Cards                                    │     │    │
+│  │  │  • Hoy: 5 conversiones                        │     │    │
+│  │  │  • Valor Total: $750,000                      │     │    │
+│  │  │  • Confianza Media IA: 85%                    │     │    │
+│  │  └──────────────────────────────────────────────┘     │    │
+│  │                                                         │    │
+│  │  ┌──────────────────────────────────────────────┐     │    │
+│  │  │  Activity Log (Tabla)                         │     │    │
+│  │  │  Fecha | Cliente | Evento | Valor | Razón IA │     │    │
+│  │  │  ───────────────────────────────────────────  │     │    │
+│  │  │  10:30 | Juan P. | Sale   | $150k | Compra   │     │    │
+│  │  │  09:15 | María G.| Lead   | $0    | Interés  │     │    │
+│  │  └──────────────────────────────────────────────┘     │    │
+│  └────────────────────────────────────────────────────────┘    │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Componentes del Sistema
+
+#### 1. n8n Workflow 3 - Sync to Firestore
+**Nodo:** `Sync to Firestore` (HTTP Request)  
+**Tipo:** `n8n-nodes-base.httpRequest`  
+**Método:** POST  
+**URL:** `https://firestore.googleapis.com/v1/projects/whatsapp-widget-admin/databases/(default)/documents/conversions?documentId={{$json.conversion_id}}`
+
+**Credenciales:** Google OAuth2 API  
+**Scope requerido:** `https://www.googleapis.com/auth/datastore`
+
+**Payload:** Formato REST API de Firestore con `fields` object usando tipos específicos (`stringValue`, `doubleValue`, `timestampValue`).
+
+**Nota:** Se usa HTTP Request en lugar de nodos nativos de Firestore para garantizar compatibilidad universal con cualquier instalación de n8n.
+
+#### 2. Firestore Collection: `/conversions`
+**Estructura de Documento:**
+```javascript
+{
+  project_id: string,           // ID del proyecto (FK a /projects)
+  conversion_name: string,      // Nombre de la conversión (lead, sale, etc.)
+  conversion_value: number,     // Valor monetario
+  phone_e164: string,           // Teléfono del lead
+  lead_email: string,           // Email detectado por IA
+  lead_name: string,            // Nombre detectado por IA
+  ai_reason: string,            // Razón de la clasificación
+  ai_confidence: number,        // Confianza (0-1)
+  created_at: Timestamp | string // Fecha de conversión
+}
+```
+
+**Índice Compuesto Requerido:**
+- Campo 1: `project_id` (Ascending)
+- Campo 2: `created_at` (Descending)
+
+Este índice es necesario para la query con `where` + `orderBy` en campos diferentes.
+
+#### 3. useConversions.js (Custom Hook)
+**Ubicación:** `src/hooks/useConversions.js`
+
+**Responsabilidades:**
+- Escuchar cambios en tiempo real con `onSnapshot`
+- Filtrar conversiones por `project_id`
+- Calcular KPIs automáticamente
+- Manejar múltiples formatos de timestamp
+
+**Manejo de Timestamps:**
+El hook maneja tres formatos diferentes:
+1. **Timestamp nativo de Firestore** (`.toDate()`)
+2. **String ISO** (desde REST API: `"2025-12-31T10:30:00Z"`)
+3. **Timestamp serializado** (`{ _seconds: 1735654200 }`)
+
+**KPIs Calculados:**
+- `totalCount`: Total de conversiones en el snapshot
+- `totalValue`: Suma de `conversion_value`
+- `todayCount`: Conversiones con fecha >= hoy (00:00:00)
+
+#### 4. MonitoringSection.jsx (UI Component)
+**Ubicación:** `src/components/sections/MonitoringSection.jsx`
+
+**Características:**
+- Tarjetas de KPIs con iconos y colores
+- Tabla de actividad reciente (últimas 50 conversiones)
+- Formato de fecha relativo ("Hace 2 horas")
+- Formato de moneda colombiana (COP)
+- Estado de carga con skeleton
+
+### Firestore Security Rules
+
+```javascript
+match /conversions/{conversionId} {
+  allow read: if request.auth != null && (
+    get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'super_admin' ||
+    exists(/databases/$(database)/documents/projects/$(resource.data.project_id)) &&
+    get(/databases/$(database)/documents/projects/$(resource.data.project_id)).data.userId == request.auth.uid
+  );
+  allow write: if false; // Solo n8n escribe
+}
+```
+
+**Reglas:**
+- **Lectura:** Permitida si el usuario es `super_admin` o propietario del proyecto
+- **Escritura:** Bloqueada desde el frontend (solo n8n escribe vía API REST)
+
+### Flujo de Datos Completo
+
+1. **Conversión detectada** → n8n Workflow 3 clasifica con OpenAI
+2. **Guardar en PostgreSQL** → `INSERT INTO conversions (...)`
+3. **Sincronizar a Firestore** → HTTP Request a REST API
+4. **Firestore dispara evento** → `onSnapshot` en React
+5. **Hook actualiza estado** → `setConversions(convList)`
+6. **UI re-renderiza** → MonitoringSection muestra datos actualizados
+
+**Latencia típica:** 1-3 segundos desde clasificación hasta visualización en dashboard.
+
+### Workflow 4: Bulk Sync Conversions (Migración Inicial)
+
+**Propósito:** Sincronizar datos históricos de PostgreSQL a Firestore (ejecución única).
+
+**Trigger:** Manual  
+**Nodos:**
+1. `Get All Conversions` (PostgreSQL) → `SELECT * FROM conversions`
+2. `Sync to Firestore` (HTTP Request) → Mismo formato que Workflow 3
+
+**Nota:** Este workflow se ejecuta una sola vez para poblar Firestore con datos existentes. Después, solo Workflow 3 sincroniza nuevas conversiones.
+
+### Ventajas de Esta Arquitectura
+
+✅ **Real-time:** Actualizaciones instantáneas sin polling  
+✅ **Escalable:** Firestore maneja millones de documentos  
+✅ **Seguro:** Reglas de seguridad a nivel de documento  
+✅ **Offline-first:** SDK de Firebase maneja caché local  
+✅ **Multi-tenant:** Filtro por `project_id` garantiza aislamiento  
+✅ **Backup:** PostgreSQL sigue siendo la fuente de verdad  
+
+### Limitaciones y Consideraciones
+
+⚠️ **Límite de 50 conversiones:** La query actual usa `limit(50)`. Para más datos, implementar paginación.  
+⚠️ **Costos de Firestore:** Cada `onSnapshot` cuenta como lectura. Optimizar con caché si el volumen crece.  
+⚠️ **Índice requerido:** El índice compuesto debe crearse manualmente en Firebase Console.  
+⚠️ **Formato de timestamp:** n8n usa `timestampValue` (string ISO), no Timestamp nativo.  
+
+### Próximos Pasos
+
+- [ ] Implementar paginación para más de 50 conversiones
+- [ ] Agregar filtros por fecha y tipo de conversión
+- [ ] Exportar datos a CSV desde el dashboard
+- [ ] Notificaciones push para nuevas conversiones
+- [ ] Gráficos de tendencias con Chart.js
+
 13. **Dedupe con progresión**: `ON CONFLICT (external_attrib_id)` solo actualiza si `ai_label` no baja.
+
+14. **Valores Dinámicos**: La IA ahora puede sobreescribir el valor de conversión si detecta un monto específico en el chat, permitiendo ROAS real en lugar de estático.
 
 ---

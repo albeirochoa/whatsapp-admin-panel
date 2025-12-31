@@ -1,0 +1,274 @@
+{
+  "name": "Workflow 2 - yCloud Ingest",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "ycloud/:project_id",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -1664,
+        720
+      ],
+      "id": "c359c218-e3b8-40bd-afc1-e2d1b805ec64",
+      "name": "yCloud Webhook",
+      "webhookId": "ycloud-webhook-uuid"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Obtener project_id de la URL (viene en params del webhook)\nconst project_id = $input.first().json.params?.project_id || $('yCloud Webhook').first().json.params?.project_id || 'unknown';\nconst payload = $input.first().json.body;\n\n// Detectar tipo de evento\nconst is_inbound = payload.type === 'whatsapp.inbound_message.received';\nconst is_outbound = payload.type === 'whatsapp.message.updated';\n\nif (!is_inbound && !is_outbound) {\n  throw new Error(`Unknown event type: ${payload.type}`);\n}\n\n// Extraer datos según tipo\nlet message_data;\n\nif (is_inbound) {\n  const text = payload.whatsappInboundMessage.text?.body || '';\n\n  // Extraer hash del mensaje usando regex (formato: #ABCDE)\n  let click_id_hash = null;\n  const hashMatch = text.match(/#([A-Z0-9]{5})/);\n  if (hashMatch) {\n    click_id_hash = hashMatch[1];\n  }\n\n  message_data = {\n    message_id: payload.whatsappInboundMessage.id,\n    phone: payload.whatsappInboundMessage.from,\n    business_phone: payload.whatsappInboundMessage.to,\n    text: text,\n    ts: payload.whatsappInboundMessage.sendTime,\n    direction: 'in',\n    event_type: 'message_in',\n    click_id_hash: click_id_hash\n  };\n} else {\n  // Solo procesar si status = delivered\n  if (payload.whatsappMessage.status !== 'delivered') {\n    return [];\n  }\n\n  message_data = {\n    message_id: payload.whatsappMessage.id,\n    phone: payload.whatsappMessage.to,\n    business_phone: payload.whatsappMessage.from,\n    text: payload.whatsappMessage.text?.body || '',\n    ts: payload.whatsappMessage.sendTime,\n    direction: 'out',\n    event_type: 'message_out',\n    click_id_hash: null\n  };\n}\n\n// Normalizar teléfono\nfunction normalizePhone(phone) {\n  let clean = phone.replace(/[^0-9+]/g, '');\n  if (!clean.startsWith('+')) clean = '+' + clean;\n  return clean;\n}\n\n// Generar event_id único\nconst event_id = `evt_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;\n\nreturn {\n  event_id,\n  project_id,\n  business_phone: normalizePhone(message_data.business_phone),\n  phone_e164: normalizePhone(message_data.phone),\n  message_id: message_data.message_id,\n  message_text: message_data.text,\n  direction: message_data.direction,\n  event_type: message_data.event_type,\n  ts: message_data.ts,\n  click_id_hash: message_data.click_id_hash,\n  provider_event_type: payload.type,\n  payload_raw: JSON.stringify(payload)\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1456,
+        720
+      ],
+      "id": "4c78d126-2c9c-4876-b76d-78c38efa633f",
+      "name": "Parse yCloud"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n  project_id,\n  client_name,\n  status,\n  phone_filter,\n  sheet_spreadsheet_id,\n  sheet_messages_name\nFROM clients_config\nWHERE project_id = $1\nLIMIT 1;",
+        "options": {
+          "queryReplacement": "={{ [$json.project_id] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -1264,
+        720
+      ],
+      "id": "19c0bea3-e55d-4947-af26-ab48ee771355",
+      "name": "Get Config",
+      "credentials": {
+        "postgres": {
+          "id": "8YJV6aXkwW8GDwrM",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $('Get Config').item.json.phone_filter }}",
+              "value2": "={{ $('Parse yCloud').item.json.business_phone }}"
+            },
+            {
+              "value1": "={{ $('Get Config').item.json.status }}",
+              "value2": "active"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        -1104,
+        768
+      ],
+      "id": "b2f08039-f9d8-4ebd-8e42-ffd402762f6a",
+      "name": "Validate Phone & Status"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Obtener datos del nodo Parse yCloud\nconst msg = $('Parse yCloud').first().json;\nconst config = $('Get Config').first().json;\n\n// Preparar query\nconst query = `\nINSERT INTO events (\n  event_id,\n  project_id,\n  event_type,\n  phone_e164,\n  ts,\n  message_text,\n  message_id,\n  direction,\n  click_id_hash,\n  provider_event_type,\n  payload_raw,\n  processed_at,\n  created_at\n) VALUES (\n  $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13\n)\nON CONFLICT (event_id) DO NOTHING\nRETURNING event_id;\n`;\n\nconst params = [\n  msg.event_id,\n  msg.project_id,\n  msg.event_type,\n  msg.phone_e164,\n  msg.ts,\n  msg.message_text,\n  msg.message_id,\n  msg.direction,\n  msg.click_id_hash,\n  msg.provider_event_type,\n  msg.payload_raw,\n  null,\n  new Date().toISOString()\n];\n\nreturn {\n  query,\n  params,\n  // Para sheets\n  phone_e164: msg.phone_e164,\n  direction: msg.direction,\n  message_text: msg.message_text,\n  ts: msg.ts,\n  message_id: msg.message_id,\n  sheet_spreadsheet_id: config.sheet_spreadsheet_id,\n  sheet_messages_name: config.sheet_messages_name || 'chats_raw'\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -864,
+        720
+      ],
+      "id": "1b7057d1-8684-47be-8ed9-f945090416eb",
+      "name": "Prepare Message SQL"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "={{ $json.query }}",
+        "options": {
+          "queryReplacement": "={{ $json.params }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -672,
+        544
+      ],
+      "id": "a7d04cac-df5d-43d2-9629-e727efe6f8d1",
+      "name": "Insert Message to Postgres",
+      "credentials": {
+        "postgres": {
+          "id": "8YJV6aXkwW8GDwrM",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Filtrar solo campos necesarios para Sheets\nreturn {\n  phone_e164: $json.phone_e164,\n  direction: $json.direction,\n  message_text: $json.message_text,\n  timestamp_iso: $json.ts,\n  message_id: $json.message_id,\n  sheet_spreadsheet_id: $json.sheet_spreadsheet_id,\n  sheet_messages_name: $json.sheet_messages_name\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -672,
+        928
+      ],
+      "id": "14be7c2f-9c4b-4a5f-90f1-2e7979ba185b",
+      "name": "Filter for Sheets"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $json.sheet_spreadsheet_id }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "={{ $json.sheet_messages_name }}",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -464,
+        928
+      ],
+      "id": "869d29c5-2ac8-4e64-b98d-ff5925206217",
+      "name": "Append to Sheets",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "cTxVw7JPxAQjJZR5",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"success\": true, \"event_id\": $('Insert Message to Postgres').item.json.event_id, \"project_id\": $('Parse yCloud').item.json.project_id, \"timestamp\": $now.toISO() } }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        -464,
+        720
+      ],
+      "id": "df07e91b-4bf5-4026-b3c9-b978c0acea8d",
+      "name": "Respond to Webhook"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "yCloud Webhook": {
+      "main": [
+        [
+          {
+            "node": "Parse yCloud",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse yCloud": {
+      "main": [
+        [
+          {
+            "node": "Get Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Config": {
+      "main": [
+        [
+          {
+            "node": "Validate Phone & Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Phone & Status": {
+      "main": [
+        [
+          {
+            "node": "Prepare Message SQL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Message SQL": {
+      "main": [
+        [
+          {
+            "node": "Insert Message to Postgres",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Filter for Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter for Sheets": {
+      "main": [
+        [
+          {
+            "node": "Append to Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert Message to Postgres": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "0856cde6-2234-49c2-9085-d5d7489435ec",
+  "meta": {
+    "instanceId": "9f13993b16e067a82e6fa160e42190313629bb8b43c55648e41e8daa553c28a9"
+  },
+  "id": "jl8aOJ4HaktlACmm",
+  "tags": []
+}

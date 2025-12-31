@@ -29,5 +29,14 @@ service cloud.firestore {
       allow read: if true;
       allow write: if false;
     }
+
+    // Conversiones: Permitir lectura si el usuario es dueño del proyecto asociado
+    match /conversions/{docId} {
+      allow read: if request.auth != null && (
+        isSuperAdmin() || 
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)/projects/$(resource.data.project_id))
+      );
+      allow write: if false; // Solo por SDK Admin / n8n
+    }
   }
 }

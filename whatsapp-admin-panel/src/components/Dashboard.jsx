@@ -2,6 +2,7 @@ import { useState } from 'react';
 import Header from './Header';
 import Sidebar from './Sidebar';
 import ConfigSection from './sections/ConfigSection';
+import MonitoringSection from './sections/MonitoringSection';
 import AgentsSection from './sections/AgentsSection';
 import CodeSection from './sections/CodeSection';
 import PreviewSection from './sections/PreviewSection';
@@ -120,6 +121,8 @@ const Dashboard = ({ user, userData, onLogout, onSwitchView, isSuperAdmin }) => 
                   Eliminar proyecto
                 </button>
               </div>
+
+              <MonitoringSection selectedProject={selectedProject} />
 
               {notification && (
                 <div style={{

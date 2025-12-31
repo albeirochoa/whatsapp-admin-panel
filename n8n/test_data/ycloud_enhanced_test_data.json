@@ -1,0 +1,302 @@
+[
+    {
+        "description": "C1 - Inbound con email y hash #AAA01",
+        "params": {
+            "project_id": "test-color-tapetes"
+        },
+        "body": {
+            "type": "whatsapp.inbound_message.received",
+            "id": "evt_in_201",
+            "whatsappInboundMessage": {
+                "id": "yw_in_201",
+                "from": "+573002000001",
+                "to": "+573123725256",
+                "fromName": "María González",
+                "type": "text",
+                "text": {
+                    "body": "Hola! Me interesa la alfombra persa 🏷️ Ref: #AAA01. Mi email es maria.gonzalez@gmail.com para enviar cotización"
+                },
+                "sendTime": "2025-12-20T10:00:00Z"
+            }
+        }
+    },
+    {
+        "description": "C1 - Segundo mensaje (sin hash, debe heredar atribución)",
+        "params": {
+            "project_id": "test-color-tapetes"
+        },
+        "body": {
+            "type": "whatsapp.inbound_message.received",
+            "id": "evt_in_202",
+            "whatsappInboundMessage": {
+                "id": "yw_in_202",
+                "from": "+573002000001",
+                "to": "+573123725256",
+                "fromName": "María González",
+                "type": "text",
+                "text": {
+                    "body": "¿Cuánto cuesta el envío a Bogotá?"
+                },
+                "sendTime": "2025-12-20T10:05:00Z"
+            }
+        }
+    },
+    {
+        "description": "C2 - Inbound con email y hash #BBB02",
+        "params": {
+            "project_id": "test-color-tapetes"
+        },
+        "body": {
+            "type": "whatsapp.inbound_message.received",
+            "id": "evt_in_203",
+            "whatsappInboundMessage": {
+                "id": "yw_in_203",
+                "from": "+573002000002",
+                "to": "+573123725256",
+                "profileName": "Carlos Ruiz",
+                "type": "text",
+                "text": {
+                    "body": "Vi el código #BBB02 en Instagram. Contacto: carlos.ruiz@hotmail.com"
+                },
+                "sendTime": "2025-12-20T10:10:00Z"
+            }
+        }
+    },
+    {
+        "description": "C2 - Confirmación de compra",
+        "params": {
+            "project_id": "test-color-tapetes"
+        },
+        "body": {
+            "type": "whatsapp.inbound_message.received",
+            "id": "evt_in_204",
+            "whatsappInboundMessage": {
+                "id": "yw_in_204",
+                "from": "+573002000002",
+                "to": "+573123725256",
+                "profileName": "Carlos Ruiz",
+                "type": "text",
+                "text": {
+                    "body": "Perfecto! Voy a comprar 2 unidades. ¿Aceptan transferencia?"
+                },
+                "sendTime": "2025-12-20T10:15:00Z"
+            }
+        }
+    },
+    {
+        "description": "C3 - Orgánico sin hash (debe quedar como organic)",
+        "params": {
+            "project_id": "test-color-tapetes"
+        },
+        "body": {
+            "type": "whatsapp.inbound_message.received",
+            "id": "evt_in_205",
+            "whatsappInboundMessage": {
+                "id": "yw_in_205",
+                "from": "+573002000003",
+                "to": "+573123725256",
+                "fromName": "Ana Martínez",
+                "type": "text",
+                "text": {
+                    "body": "Hola, ¿dónde están ubicados? Mi email es ana.martinez@yahoo.com"
+                },
+                "sendTime": "2025-12-20T10:20:00Z"
+            }
+        }
+    },
+    {
+        "description": "C4 - Lead calificado con email",
+        "params": {
+            "project_id": "test-color-tapetes"
+        },
+        "body": {
+            "type": "whatsapp.inbound_message.received",
+            "id": "evt_in_206",
+            "whatsappInboundMessage": {
+                "id": "yw_in_206",
+                "from": "+573002000004",
+                "to": "+573123725256",
+                "contact": {
+                    "name": "Pedro López"
+                },
+                "type": "text",
+                "text": {
+                    "body": "Necesito tapete infantil 2x3 metros. Pueden enviar catálogo a pedro.lopez@empresa.com.co?"
+                },
+                "sendTime": "2025-12-20T10:25:00Z"
+            }
+        }
+    },
+    {
+        "description": "C5 - Con hash #CCC05 y nombre",
+        "params": {
+            "project_id": "test-color-tapetes"
+        },
+        "body": {
+            "type": "whatsapp.inbound_message.received",
+            "id": "evt_in_207",
+            "whatsappInboundMessage": {
+                "id": "yw_in_207",
+                "from": "+573002000005",
+                "to": "+573123725256",
+                "profile": {
+                    "name": "Laura Sánchez"
+                },
+                "type": "text",
+                "text": {
+                    "body": "Oferta #CCC05 disponible? Email: laura.sanchez@outlook.com"
+                },
+                "sendTime": "2025-12-20T10:30:00Z"
+            }
+        }
+    },
+    {
+        "description": "C5 - Mensaje de seguimiento (test cache)",
+        "params": {
+            "project_id": "test-color-tapetes"
+        },
+        "body": {
+            "type": "whatsapp.inbound_message.received",
+            "id": "evt_in_208",
+            "whatsappInboundMessage": {
+                "id": "yw_in_208",
+                "from": "+573002000005",
+                "to": "+573123725256",
+                "profile": {
+                    "name": "Laura Sánchez"
+                },
+                "type": "text",
+                "text": {
+                    "body": "Gracias por la info!"
+                },
+                "sendTime": "2025-12-20T10:35:00Z"
+            }
+        }
+    },
+    {
+        "description": "C6 - Sin email ni hash (solo nombre)",
+        "params": {
+            "project_id": "test-color-tapetes"
+        },
+        "body": {
+            "type": "whatsapp.inbound_message.received",
+            "id": "evt_in_209",
+            "whatsappInboundMessage": {
+                "id": "yw_in_209",
+                "from": "+573002000006",
+                "to": "+573123725256",
+                "fromName": "Roberto Díaz",
+                "type": "text",
+                "text": {
+                    "body": "¿Abren los domingos?"
+                },
+                "sendTime": "2025-12-20T10:40:00Z"
+            }
+        }
+    },
+    {
+        "description": "C7 - Queja con hash #DDD07",
+        "params": {
+            "project_id": "test-color-tapetes"
+        },
+        "body": {
+            "type": "whatsapp.inbound_message.received",
+            "id": "evt_in_210",
+            "whatsappInboundMessage": {
+                "id": "yw_in_210",
+                "from": "+573002000007",
+                "to": "+573123725256",
+                "fromName": "Sofía Ramírez",
+                "type": "text",
+                "text": {
+                    "body": "Problema con pedido #DDD07. Contacto: sofia.ramirez@gmail.com"
+                },
+                "sendTime": "2025-12-20T10:45:00Z"
+            }
+        }
+    },
+    {
+        "description": "C8 - Venta confirmada con email",
+        "params": {
+            "project_id": "test-color-tapetes"
+        },
+        "body": {
+            "type": "whatsapp.inbound_message.received",
+            "id": "evt_in_211",
+            "whatsappInboundMessage": {
+                "id": "yw_in_211",
+                "from": "+573002000008",
+                "to": "+573123725256",
+                "profileName": "Andrés Torres",
+                "type": "text",
+                "text": {
+                    "body": "Ref #EEE08 personalizado. Quiero comprar YA! Email: andres.torres@company.co"
+                },
+                "sendTime": "2025-12-20T10:50:00Z"
+            }
+        }
+    },
+    {
+        "description": "C8 - Confirmación de pago",
+        "params": {
+            "project_id": "test-color-tapetes"
+        },
+        "body": {
+            "type": "whatsapp.inbound_message.received",
+            "id": "evt_in_212",
+            "whatsappInboundMessage": {
+                "id": "yw_in_212",
+                "from": "+573002000008",
+                "to": "+573123725256",
+                "profileName": "Andrés Torres",
+                "type": "text",
+                "text": {
+                    "body": "Acabo de hacer la transferencia por $850.000. Adjunto comprobante."
+                },
+                "sendTime": "2025-12-20T10:55:00Z"
+            }
+        }
+    },
+    {
+        "description": "C9 - Consulta simple (no calificado)",
+        "params": {
+            "project_id": "test-color-tapetes"
+        },
+        "body": {
+            "type": "whatsapp.inbound_message.received",
+            "id": "evt_in_213",
+            "whatsappInboundMessage": {
+                "id": "yw_in_213",
+                "from": "+573002000009",
+                "to": "+573123725256",
+                "fromName": "Juliana Castro",
+                "type": "text",
+                "text": {
+                    "body": "¿Cómo limpio el tapete? juliana.castro@mail.com"
+                },
+                "sendTime": "2025-12-20T11:00:00Z"
+            }
+        }
+    },
+    {
+        "description": "C10 - Lead calificado sin hash",
+        "params": {
+            "project_id": "test-color-tapetes"
+        },
+        "body": {
+            "type": "whatsapp.inbound_message.received",
+            "id": "evt_in_214",
+            "whatsappInboundMessage": {
+                "id": "yw_in_214",
+                "from": "+573002000010",
+                "to": "+573123725256",
+                "fromName": "Diego Morales",
+                "type": "text",
+                "text": {
+                    "body": "Necesito asesoría para oficina corporativa. Contacto: diego.morales@corp.com"
+                },
+                "sendTime": "2025-12-20T11:05:00Z"
+            }
+        }
+    }
+]

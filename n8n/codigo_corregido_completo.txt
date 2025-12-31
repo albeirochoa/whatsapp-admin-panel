@@ -1,0 +1,238 @@
+CÓDIGO CORREGIDO - WORKFLOW AI CLASSIFICATION
+=============================================
+
+Reemplaza el código de estos nodos exactamente como está aquí.
+
+
+═══════════════════════════════════════════════════════════
+NODO 1: "Aggregate Conversation"
+═══════════════════════════════════════════════════════════
+
+MODE: "Run Once for All Items"
+
+CÓDIGO:
+```javascript
+// El Split in Batches envía 1 item a la vez (batchSize=1)
+const items = $input.all();
+
+if (items.length === 0) {
+  throw new Error('No hay items para procesar');
+}
+
+// Tomar el primer item del batch actual
+const item = items[0];
+const group = item.json;
+
+console.log('=== Procesando conversación ===');
+console.log('Project:', group.project_id);
+console.log('Phone:', group.phone_e164);
+
+// Validar estructura
+if (!group.messages || !Array.isArray(group.messages)) {
+  console.error('Estructura del grupo:', JSON.stringify(group, null, 2));
+  throw new Error('El grupo no tiene messages array. Keys disponibles: ' + Object.keys(group).join(', '));
+}
+
+const messages = group.messages;
+
+if (messages.length === 0) {
+  console.log('⚠️ Grupo sin mensajes');
+  return [{
+    json: {
+      ...group,
+      aggregated_conversation: '[No hay mensajes en este grupo]',
+      message_count: 0,
+      first_message_ts: new Date().toISOString(),
+      last_message_ts: new Date().toISOString()
+    }
+  }];
+}
+
+// Ordenar mensajes por timestamp
+const sortedMessages = messages.sort((a, b) => 
+  new Date(a.ts) - new Date(b.ts)
+);
+
+const first_message_ts = sortedMessages[0].ts;
+const last_message_ts = sortedMessages[sortedMessages.length - 1].ts;
+
+console.log('Mensajes:', messages.length);
+console.log('Desde:', first_message_ts);
+console.log('Hasta:', last_message_ts);
+
+// Construir conversación agregada
+const conversation = sortedMessages
+  .map(m => {
+    const direction = m.direction === 'in' ? 'CLIENTE' : 'AGENTE';
+    const text = m.text && m.text.trim() ? m.text : '[Multimedia/Adjunto/Sin texto]';
+    return `${direction}: ${text}`;
+  })
+  .join('\n');
+
+console.log('✅ Conversación construida (' + conversation.length + ' caracteres)');
+
+// Retornar como array con .json
+return [{
+  json: {
+    project_id: group.project_id,
+    phone_e164: group.phone_e164,
+    config: group.config,
+    event_ids: group.event_ids,
+    aggregated_conversation: conversation,
+    message_count: messages.length,
+    first_message_ts,
+    last_message_ts
+  }
+}];
+```
+
+
+═══════════════════════════════════════════════════════════
+NODO 2: "Continue Loop"
+═══════════════════════════════════════════════════════════
+
+MODE: "Run Once for All Items"
+
+CÓDIGO:
+```javascript
+// Este nodo hace 2 cosas:
+// 1. Agrega delay para rate limiting
+// 2. Pasa datos de vuelta al Split in Batches
+
+const items = $input.all();
+
+console.log('=== Continue Loop ===');
+console.log('Items procesados:', items.length);
+
+// RATE LIMITING: Delay de 2 segundos entre conversaciones
+// Esto previene:
+// - 429 errors de OpenAI
+// - Saturación de Sheets API
+// - Saturación de Postgres
+const DELAY_MS = 2000; // 2 segundos
+
+console.log('⏱️  Esperando', DELAY_MS, 'ms antes de continuar...');
+
+await new Promise(resolve => setTimeout(resolve, DELAY_MS));
+
+console.log('✅ Continuando al siguiente item del loop');
+
+// Retornar los items para que Split in Batches continúe
+return items;
+```
+
+
+═══════════════════════════════════════════════════════════
+CONFIGURACIÓN: "Loop Conversations" (Split in Batches)
+═══════════════════════════════════════════════════════════
+
+PARAMETERS:
+- Batch Size: 1
+- Options: (dejar vacío)
+
+SETTINGS (Pestaña Settings, NO Parameters):
+✅ CRÍTICO: Activar "Always Output Data" = TRUE
+
+CONEXIONES:
+- Input 0 (superior): Viene de "Group by Phone"
+- Input 1 (inferior): Viene de "Continue Loop" ← VERIFICAR ESTO
+- Output 0 (superior): Va a "Aggregate Conversation"
+
+
+═══════════════════════════════════════════════════════════
+VERIFICACIÓN DE CONEXIONES
+═══════════════════════════════════════════════════════════
+
+El flujo completo debe ser:
+
+Group by Phone (40 items)
+    ↓
+Loop Conversations [Input 0 superior]
+    ↓ [Output 0 superior]
+Aggregate Conversation
+    ↓
+Find Click by Phone
+    ↓
+Merge Click Data
+    ↓
+Classify with OpenAI
+    ↓
+Parse AI Response
+    ↓ (se divide en 2)
+    ├→ Prepare for Sheets → Append to Sheets
+    └→ Save Conversion
+           ↓
+       Prepare Update
+           ↓
+       Mark as Processed
+           ↓
+       Continue Loop
+           ↓
+       Loop Conversations [Input 1 inferior] ← LOOP DE VUELTA
+
+
+CRÍTICO: La línea de "Continue Loop" debe conectarse al 
+INPUT INFERIOR del nodo "Loop Conversations"
+
+
+═══════════════════════════════════════════════════════════
+TESTING
+═══════════════════════════════════════════════════════════
+
+1. Ejecuta el workflow manualmente (no esperes el trigger)
+
+2. Observa la consola del navegador (F12 → Console)
+   Deberías ver logs como:
+   
+   === Procesando conversación ===
+   Project: proj_123
+   Phone: +573001234567
+   Mensajes: 5
+   ✅ Conversación construida
+   
+   === Continue Loop ===
+   Items procesados: 1
+   ⏱️  Esperando 2000 ms antes de continuar...
+   ✅ Continuando al siguiente item del loop
+   
+   [Se repite 40 veces]
+
+3. Verifica en el nodo "Loop Conversations":
+   - Debe mostrar "Processing batch X of 40"
+   - Debe llegar hasta "batch 40 of 40"
+
+4. Tiempo estimado:
+   - 40 items × 2 segundos delay = 80 segundos
+   - Más tiempo de procesamiento OpenAI = ~2-3 minutos total
+
+
+═══════════════════════════════════════════════════════════
+TROUBLESHOOTING
+═══════════════════════════════════════════════════════════
+
+PROBLEMA: "Continue Loop" da error de .all()
+SOLUCIÓN: Verificar que Mode = "Run Once for All Items"
+
+PROBLEMA: Loop solo procesa 1 item
+SOLUCIÓN: Verificar que:
+  1. "Always Output Data" = TRUE en Loop Conversations
+  2. Conexión de Continue Loop va al input INFERIOR
+
+PROBLEMA: Error "Cannot read property 'messages'"
+SOLUCIÓN: El nodo "Group by Phone" no está generando la estructura correcta
+  - Verificar que retorna: return result.map(group => ({ json: group }));
+
+PROBLEMA: Timeout después de varios items
+SOLUCIÓN: Normal si hay muchos items. El sistema de queue
+  solucionará esto, pero por ahora está bien.
+
+
+═══════════════════════════════════════════════════════════
+PRÓXIMOS PASOS (después de que funcione)
+═══════════════════════════════════════════════════════════
+
+1. ✅ Verificar que procesa los 40 items correctamente
+2. ✅ Revisar logs para errores
+3. ✅ Verificar datos en Postgres y Sheets
+4. Ajustar delay si hay rate limits (aumentar a 3-5 segundos)
+5. Cuando tengas 5+ clientes, implementar sistema de queue

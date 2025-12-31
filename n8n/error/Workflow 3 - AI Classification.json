@@ -1,0 +1,533 @@
+{
+  "name": "Workflow 3 - AI Classification",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -11104,
+        -2256
+      ],
+      "id": "e78b02c0-282d-4d41-aa09-883445ef7448",
+      "name": "Every 5 Minutes"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n  e.event_id,\n  e.project_id,\n  e.phone_e164,\n  e.ts,\n  e.message_text,\n  e.direction,\n  c.client_name,\n  c.prompt_template,\n  c.conversion_config,\n  c.openai_model,\n  c.openai_temperature,\n  c.openai_max_tokens,\n  c.click_matching_window_days,\n  c.sheet_spreadsheet_id,\n  c.sheet_conversions_name\nFROM events e\nINNER JOIN clients_config c ON e.project_id = c.project_id\nWHERE e.event_type IN ('message_in', 'message_out')\n  AND e.processed_at IS NULL\n  AND c.status = 'active'\nORDER BY e.project_id, e.phone_e164, e.ts ASC\nLIMIT 500;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -10880,
+        -2256
+      ],
+      "id": "a3bc5350-affe-4288-b698-8f9235d2f374",
+      "name": "Get Pending Messages",
+      "credentials": {
+        "postgres": {
+          "id": "8YJV6aXkwW8GDwrM",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "check-has-items",
+              "leftValue": "={{ $input.all().length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -10656,
+        -2608
+      ],
+      "id": "42951e8f-a60a-428d-b39f-7e848cd8bfe9",
+      "name": "Has Messages?"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Agrupar mensajes por project_id + phone_e164\nconst items = $input.all();\nconst groups = {};\n\nfor (const item of items) {\n  const key = `${item.json.project_id}:${item.json.phone_e164}`;\n  \n  if (!groups[key]) {\n    groups[key] = {\n      project_id: item.json.project_id,\n      phone_e164: item.json.phone_e164,\n      config: {\n        client_name: item.json.client_name,\n        prompt_template: item.json.prompt_template,\n        conversion_config: typeof item.json.conversion_config === 'string' \n          ? JSON.parse(item.json.conversion_config) \n          : item.json.conversion_config,\n        openai_model: item.json.openai_model || 'gpt-4o-mini',\n        openai_temperature: parseFloat(item.json.openai_temperature) || 0.3,\n        openai_max_tokens: parseInt(item.json.openai_max_tokens) || 150,\n        click_matching_window_days: parseInt(item.json.click_matching_window_days) || 60,\n        sheet_spreadsheet_id: item.json.sheet_spreadsheet_id,\n        sheet_conversions_name: item.json.sheet_conversions_name || 'conversions'\n      },\n      messages: [],\n      event_ids: []\n    };\n  }\n  \n  groups[key].messages.push({\n    ts: item.json.ts,\n    text: item.json.message_text || '',\n    direction: item.json.direction\n  });\n  \n  groups[key].event_ids.push(item.json.event_id);\n}\n\n// Convertir a array de items\nreturn Object.values(groups).map(group => ({\n  json: group\n}));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -10416,
+        -2736
+      ],
+      "id": "ea604b67-f6d4-4a08-9012-141fe2e80050",
+      "name": "Group by Phone"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        -10176,
+        -2560
+      ],
+      "id": "44c90368-62d8-4947-804a-05087e711781",
+      "name": "Loop Conversations",
+      "alwaysOutputData": false
+    },
+    {
+      "parameters": {
+        "jsCode": "const group = $input.first().json;\n\n// Filtrar mensajes con texto válido y ordenar por timestamp\nconst sortedMessages = group.messages\n  .filter(m => m.text && m.text.trim() !== '')  // Filtrar mensajes vacíos\n  .sort((a, b) => new Date(a.ts) - new Date(b.ts));\n\n// Edge case: sin mensajes válidos\nif (sortedMessages.length === 0) {\n  return [\n    {\n      json: {\n        project_id: group.project_id,\n        phone_e164: group.phone_e164,\n        config: group.config,\n        event_ids: group.event_ids || [],\n        aggregated_conversation: '[Sin mensajes de texto válidos]',\n        message_count: 0,\n        first_message_ts: new Date().toISOString(),\n        last_message_ts: new Date().toISOString()\n      }\n    }\n  ];\n}\n\n// Formatear conversación para OpenAI\nconst conversation = sortedMessages\n  .map(m => {\n    const prefix = m.direction === 'in' ? 'CLIENTE: ' : 'AGENTE: ';\n    return prefix + m.text.trim();\n  })\n  .join('\\n');\n\n// Timestamps\nconst first_message_ts = sortedMessages[0].ts;\nconst last_message_ts = sortedMessages[sortedMessages.length - 1].ts;\n\nreturn [\n  {\n    json: {\n      project_id: group.project_id,\n      phone_e164: group.phone_e164,\n      config: group.config,\n      event_ids: group.event_ids || [],\n      aggregated_conversation: conversation,\n      message_count: sortedMessages.length,\n      first_message_ts,\n      last_message_ts\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -9968,
+        -2688
+      ],
+      "id": "2ac76ba4-4cb3-47f1-a545-7a22c925942e",
+      "name": "Aggregate Conversation"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n  event_id as click_event_id,\n  click_id,\n  click_id_type,\n  click_id_hash,\n  ts as click_ts,\n  landing_url\nFROM events\nWHERE project_id = $1\n  AND phone_e164 = $2\n  AND event_type = 'click'\n  AND ts < $3\n  AND ts >= NOW() - INTERVAL '60 days'\nORDER BY ts DESC\nLIMIT 1;",
+        "options": {
+          "queryReplacement": "={{ [$json.project_id, $json.phone_e164, $json.first_message_ts] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -9744,
+        -2576
+      ],
+      "id": "fbd01dca-5f47-45d3-8449-d217a36df3ac",
+      "name": "Find Click by Phone",
+      "credentials": {
+        "postgres": {
+          "id": "8YJV6aXkwW8GDwrM",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Combinar datos de conversación con click encontrado (si existe)\nconst convo = $('Aggregate Conversation').first().json;\nconst clickResult = $input.all();\n\nlet click_data = null;\nif (clickResult.length > 0 && clickResult[0].json.click_event_id) {\n  click_data = clickResult[0].json;\n}\n\nreturn {\n  ...convo,\n  click_data,\n  has_click: click_data !== null\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -9536,
+        -2704
+      ],
+      "id": "bcc1f9dd-442a-4d15-87d7-b0fdd4e0faca",
+      "name": "Merge Click Data"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "={{ $json.config.openai_model }}",
+          "mode": "id"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "={{ $json.config.prompt_template }}",
+              "role": "system"
+            },
+            {
+              "content": "=Conversación de WhatsApp:\n\n{{ $json.aggregated_conversation }}\n\nClasifica esta conversación según las reglas definidas. Responde SOLO con el JSON."
+            }
+          ]
+        },
+        "options": {
+          "maxTokens": "={{ $json.config.openai_max_tokens || 200 }}",
+          "temperature": "={{ $json.config.openai_temperature || 0.3 }}"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.8,
+      "position": [
+        -9392,
+        -2560
+      ],
+      "id": "d091fdbc-ddd1-4b1a-bd06-5f7abcb59654",
+      "name": "Classify with OpenAI",
+      "credentials": {
+        "openAiApi": {
+          "id": "AJExvdlTweeZ6ZpW",
+          "name": "OpenAi_Leadsignal"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const openai_response = $input.first().json;\nconst convo_data = $('Merge Click Data').first().json;\n\n// Parsear respuesta JSON de OpenAI\nlet ai_result;\ntry {\n  // OpenAI response viene en message.content\n  const content = openai_response.message?.content || openai_response.choices?.[0]?.message?.content || '{}';\n  \n  // Limpiar posibles backticks de markdown\n  const cleanContent = content.replace(/```json\\n?/g, '').replace(/```\\n?/g, '').trim();\n  \n  ai_result = JSON.parse(cleanContent);\n  \n  // Validar campos requeridos\n  if (typeof ai_result.label === 'undefined') {\n    ai_result.label = 1;\n  }\n  if (typeof ai_result.confidence === 'undefined') {\n    ai_result.confidence = 0.5;\n  }\n  if (!ai_result.reason) {\n    ai_result.reason = 'Clasificación automática';\n  }\n  \n  // Validar label (1-3)\n  if (![1, 2, 3].includes(ai_result.label)) {\n    ai_result.label = 1;\n  }\n  \n} catch (error) {\n  // Fallback si falla el parseo\n  ai_result = {\n    label: 1,\n    confidence: 0.3,\n    reason: 'Error parsing AI response: ' + error.message\n  };\n}\n\n// Obtener config de conversión según label\nconst conversion_config = convo_data.config.conversion_config[ai_result.label.toString()] || \n  { name: 'unknown', value: 0, currency: 'USD' };\n\n// Generar conversion_id\nconst conversion_id = `conv_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;\n\n// Determinar método de atribución\nlet attribution_method = 'organic';\nif (convo_data.click_data) {\n  attribution_method = convo_data.click_data.click_id_hash ? 'click_id_hash_match' : 'phone_match';\n}\n\n// External attrib ID para dedupe\nconst external_attrib_id = `conv-${convo_data.project_id}-${convo_data.phone_e164}-${ai_result.label}`;\n\n// Timestamp de conversión\nconst conversion_time = new Date().toISOString();\n\nreturn {\n  conversion_id,\n  project_id: convo_data.project_id,\n  phone_e164: convo_data.phone_e164,\n  click_event_id: convo_data.click_data?.click_event_id || null,\n  click_id: convo_data.click_data?.click_id || null,\n  click_id_type: convo_data.click_data?.click_id_type || null,\n  attribution_method,\n  ai_label: ai_result.label,\n  ai_confidence: ai_result.confidence,\n  ai_reason: ai_result.reason,\n  ai_model_used: convo_data.config.openai_model || 'gpt-4o-mini',\n  conversion_name: conversion_config.name,\n  conversion_value: conversion_config.value,\n  conversion_currency: conversion_config.currency || 'USD',\n  conversion_time,\n  external_attrib_id,\n  aggregated_conversation: convo_data.aggregated_conversation,\n  message_count: convo_data.message_count,\n  first_message_ts: convo_data.first_message_ts,\n  last_message_ts: convo_data.last_message_ts,\n  event_ids: convo_data.event_ids,\n  config: convo_data.config\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -9120,
+        -2256
+      ],
+      "id": "9fc6e173-4f08-4d84-9a3a-34d8e3278025",
+      "name": "Parse AI Response"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO conversions (\n  conversion_id,\n  project_id,\n  phone_e164,\n  click_event_id,\n  click_id,\n  click_id_type,\n  attribution_method,\n  ai_label,\n  ai_confidence,\n  ai_reason,\n  ai_model_used,\n  conversion_name,\n  conversion_value,\n  conversion_currency,\n  conversion_time,\n  external_attrib_id,\n  aggregated_conversation,\n  message_count,\n  first_message_ts,\n  last_message_ts,\n  status,\n  created_at\n) VALUES (\n  $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, 'pending', NOW()\n)\nON CONFLICT (external_attrib_id) DO UPDATE SET\n  ai_label = EXCLUDED.ai_label,\n  ai_confidence = EXCLUDED.ai_confidence,\n  ai_reason = EXCLUDED.ai_reason,\n  conversion_name = EXCLUDED.conversion_name,\n  conversion_value = EXCLUDED.conversion_value,\n  aggregated_conversation = EXCLUDED.aggregated_conversation,\n  message_count = EXCLUDED.message_count,\n  last_message_ts = EXCLUDED.last_message_ts,\n  updated_at = NOW()\nWHERE conversions.ai_label <= EXCLUDED.ai_label\nRETURNING conversion_id;",
+        "options": {
+          "queryReplacement": "={{ [$json.conversion_id, $json.project_id, $json.phone_e164, $json.click_event_id, $json.click_id, $json.click_id_type, $json.attribution_method, $json.ai_label, $json.ai_confidence, $json.ai_reason, $json.ai_model_used, $json.conversion_name, $json.conversion_value, $json.conversion_currency, $json.conversion_time, $json.external_attrib_id, $json.aggregated_conversation.substring(0, 5000), $json.message_count, $json.first_message_ts, $json.last_message_ts] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -8896,
+        -2352
+      ],
+      "id": "e5652fb7-71fc-4db7-94fc-f461cb69741a",
+      "name": "Save Conversion",
+      "credentials": {
+        "postgres": {
+          "id": "8YJV6aXkwW8GDwrM",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Preparar datos para marcar mensajes como procesados\nconst data = $('Parse AI Response').first().json;\nconst event_ids = data.event_ids || [];\n\nif (event_ids.length === 0) {\n  return { success: false, message: 'No event_ids to update' };\n}\n\n// Formatear para el query\nreturn {\n  event_ids_array: event_ids,\n  count: event_ids.length\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -8672,
+        -2352
+      ],
+      "id": "8317383a-de1d-4f65-9a86-b1618475d2d7",
+      "name": "Prepare Update"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE events\nSET processed_at = NOW()\nWHERE event_id = ANY($1::text[])\nRETURNING event_id;",
+        "options": {
+          "queryReplacement": "={{ [$json.event_ids_array] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -8464,
+        -2352
+      ],
+      "id": "67971e21-e5e8-4e59-ad79-7e8b92d37f20",
+      "name": "Mark as Processed",
+      "credentials": {
+        "postgres": {
+          "id": "8YJV6aXkwW8GDwrM",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Preparar fila para Google Sheets\nconst data = $('Parse AI Response').first().json;\n\n// Formatear timestamp para Google Ads (Colombia UTC-5)\nconst formatDate = (isoString) => {\n  const date = new Date(isoString);\n  return date.toISOString().replace('T', ' ').substring(0, 19) + '-05:00';\n};\n\n// Formatear label como texto\nconst labelMap = {\n  1: 'No Calificado',\n  2: 'Lead Calificado',\n  3: 'Venta Confirmada'\n};\n\nreturn {\n  click_id: data.click_id || '',\n  conversion_name: data.conversion_name,\n  conversion_time: formatDate(data.conversion_time),\n  conversion_value: data.conversion_value,\n  conversion_currency: data.conversion_currency,\n  phone_e164: data.phone_e164,\n  ai_reason: data.ai_reason,\n  ai_confidence: Math.round(data.ai_confidence * 100) / 100,\n  external_attrib_id: data.external_attrib_id,\n  label_text: labelMap[data.ai_label] || 'Unknown',\n  sheet_spreadsheet_id: data.config.sheet_spreadsheet_id,\n  sheet_name: data.config.sheet_conversions_name || 'conversions'\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -8896,
+        -2160
+      ],
+      "id": "d00f5b2d-b23c-4cf3-99b5-d5e70f821b89",
+      "name": "Prepare for Sheets"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $json.sheet_spreadsheet_id }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "={{ $json.sheet_name }}",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "click_id": "={{ $json.click_id }}",
+            "conversion_name": "={{ $json.conversion_name }}",
+            "conversion_time": "={{ $json.conversion_time }}",
+            "conversion_value": "={{ $json.conversion_value }}",
+            "conversion_currency": "={{ $json.conversion_currency }}",
+            "phone_e164": "={{ $json.phone_e164 }}",
+            "ai_reason": "={{ $json.ai_reason }}",
+            "ai_confidence": "={{ $json.ai_confidence }}",
+            "external_attrib_id": "={{ $json.external_attrib_id }}"
+          }
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -8672,
+        -2160
+      ],
+      "id": "739bf421-a6a3-4204-930d-8307a6810cb4",
+      "name": "Append to Sheets",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "cTxVw7JPxAQjJZR5",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        -8256,
+        -1872
+      ],
+      "id": "a8ccbbbc-48cb-4a9d-bbce-87b03206ff1e",
+      "name": "Continue Loop"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        -10432,
+        -2048
+      ],
+      "id": "478fb2ea-bbb5-4d5e-9558-6ddb3a33e56c",
+      "name": "No Messages"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Every 5 Minutes": {
+      "main": [
+        [
+          {
+            "node": "Get Pending Messages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Pending Messages": {
+      "main": [
+        [
+          {
+            "node": "Has Messages?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Messages?": {
+      "main": [
+        [
+          {
+            "node": "Group by Phone",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Messages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Group by Phone": {
+      "main": [
+        [
+          {
+            "node": "Loop Conversations",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Conversations": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Conversation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate Conversation": {
+      "main": [
+        [
+          {
+            "node": "Find Click by Phone",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find Click by Phone": {
+      "main": [
+        [
+          {
+            "node": "Merge Click Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Click Data": {
+      "main": [
+        [
+          {
+            "node": "Classify with OpenAI",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Classify with OpenAI": {
+      "main": [
+        [
+          {
+            "node": "Parse AI Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse AI Response": {
+      "main": [
+        [
+          {
+            "node": "Save Conversion",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Prepare for Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Conversion": {
+      "main": [
+        [
+          {
+            "node": "Prepare Update",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Update": {
+      "main": [
+        [
+          {
+            "node": "Mark as Processed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark as Processed": {
+      "main": [
+        [
+          {
+            "node": "Continue Loop",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Continue Loop": {
+      "main": [
+        [
+          {
+            "node": "Loop Conversations",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare for Sheets": {
+      "main": [
+        [
+          {
+            "node": "Append to Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "16b0d84d-d85d-455b-aa1e-330c6205e9e1",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "9f13993b16e067a82e6fa160e42190313629bb8b43c55648e41e8daa553c28a9"
+  },
+  "id": "u5xgeJVlfU1ccqyw",
+  "tags": []
+}

@@ -1,0 +1,94 @@
+{
+    "name": "Workflow 4 - Bulk Sync Conversions",
+    "nodes": [
+        {
+            "parameters": {},
+            "id": "e3a1b2c3-d4e5-4f6a-b7c8-d9e0f1a2b3c4",
+            "name": "When clicked",
+            "type": "n8n-nodes-base.manualTrigger",
+            "typeVersion": 1,
+            "position": [
+                800,
+                600
+            ]
+        },
+        {
+            "parameters": {
+                "operation": "executeQuery",
+                "query": "SELECT * FROM conversions ORDER BY conversion_time DESC;"
+            },
+            "id": "a1b2c3d4-e5f6-4a7b-b8c9-d0e1f2a3b4c5",
+            "name": "Get All Conversions",
+            "type": "n8n-nodes-base.postgres",
+            "typeVersion": 2.1,
+            "position": [
+                1000,
+                600
+            ],
+            "credentials": {
+                "postgresDb": {
+                    "id": "YOUR_POSTGRES_CRED_ID",
+                    "name": "Postgres account"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "method": "POST",
+                "url": "=https://firestore.googleapis.com/v1/projects/whatsapp-widget-admin/databases/(default)/documents/conversions?documentId={{$json.conversion_id}}",
+                "sendBody": true,
+                "specifyBody": "json",
+                "jsonBody": "={\n  \"fields\": {\n    \"project_id\": { \"stringValue\": \"{{$json.project_id}}\" },\n    \"conversion_name\": { \"stringValue\": \"{{$json.conversion_name || 'sale'}}\" },\n    \"conversion_value\": { \"doubleValue\": {{$json.conversion_value || 0}} },\n    \"phone_e164\": { \"stringValue\": \"{{$json.phone_e164}}\" },\n    \"lead_email\": { \"stringValue\": \"{{$json.lead_email || ''}}\" },\n    \"lead_name\": { \"stringValue\": \"{{$json.lead_name || ''}}\" },\n    \"ai_reason\": { \"stringValue\": \"{{$json.ai_reason || ''}}\" },\n    \"ai_confidence\": { \"doubleValue\": {{$json.ai_confidence || 0}} },\n    \"created_at\": { \"timestampValue\": \"{{$json.conversion_time}}\" }\n  }\n}",
+                "options": {}
+            },
+            "id": "c7a8e9d0-f1b2-4c3d-9e4f-5a6b7c8d9e0f",
+            "name": "Sync to Firestore",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.1,
+            "position": [
+                1200,
+                600
+            ],
+            "credentials": {
+                "googleApi": {
+                    "id": "YOUR_OAUTH2_CRED_ID",
+                    "name": "Google OAuth2 account"
+                }
+            }
+        }
+    ],
+    "connections": {
+        "When clicked": {
+            "main": [
+                [
+                    {
+                        "node": "Get All Conversions",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Get All Conversions": {
+            "main": [
+                [
+                    {
+                        "node": "Sync to Firestore",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
+    },
+    "active": false,
+    "settings": {
+        "executionOrder": "v1"
+    },
+    "versionId": "f1b2c3d4-e5f6-4a7b-8c9d-d0e1f2a3b4c5",
+    "meta": {
+        "instanceId": "9f13993b16e067a82e6fa160e42190313629bb8b43c55648e41e8daa553c28a9"
+    },
+    "id": "bulk-sync-workflow",
+    "tags": []
+}

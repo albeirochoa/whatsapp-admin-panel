@@ -1,0 +1,202 @@
+[
+    {
+        "description": "C1 - Inbound #AAA01",
+        "params": {
+            "project_id": "test-color-tapetes"
+        },
+        "body": {
+            "type": "whatsapp.inbound_message.received",
+            "id": "evt_in_101",
+            "whatsappInboundMessage": {
+                "id": "yw_in_101",
+                "from": "+573001000001",
+                "to": "+573123725256",
+                "type": "text",
+                "text": {
+                    "body": "Hola! Me interesa la alfombra persa 🏷️ Ref: #AAA01 ¿Precio?"
+                },
+                "sendTime": "2025-12-19T08:02:00Z"
+            }
+        }
+    },
+    {
+        "description": "C2 - Inbound #BBB02",
+        "params": {
+            "project_id": "test-color-tapetes"
+        },
+        "body": {
+            "type": "whatsapp.inbound_message.received",
+            "id": "evt_in_102",
+            "whatsappInboundMessage": {
+                "id": "yw_in_102",
+                "from": "+573001000002",
+                "to": "+573123725256",
+                "type": "text",
+                "text": {
+                    "body": "¿Medidas de la moderna? Código: #BBB02"
+                },
+                "sendTime": "2025-12-19T08:17:00Z"
+            }
+        }
+    },
+    {
+        "description": "C3 - Inbound (Sin Hash)",
+        "params": {
+            "project_id": "test-color-tapetes"
+        },
+        "body": {
+            "type": "whatsapp.inbound_message.received",
+            "id": "evt_in_103",
+            "whatsappInboundMessage": {
+                "id": "yw_in_103",
+                "from": "+573001000003",
+                "to": "+573123725256",
+                "type": "text",
+                "text": {
+                    "body": "Hola, ¿dónde están ubicados?"
+                },
+                "sendTime": "2025-12-19T08:32:00Z"
+            }
+        }
+    },
+    {
+        "description": "C4 - Inbound (Sin Hash)",
+        "params": {
+            "project_id": "test-color-tapetes"
+        },
+        "body": {
+            "type": "whatsapp.inbound_message.received",
+            "id": "evt_in_104",
+            "whatsappInboundMessage": {
+                "id": "yw_in_104",
+                "from": "+573001000004",
+                "to": "+573123725256",
+                "type": "text",
+                "text": {
+                    "body": "Quiero comprar el tapete de osito."
+                },
+                "sendTime": "2025-12-19T08:47:00Z"
+            }
+        }
+    },
+    {
+        "description": "C5 - Inbound #CCC05",
+        "params": {
+            "project_id": "test-color-tapetes"
+        },
+        "body": {
+            "type": "whatsapp.inbound_message.received",
+            "id": "evt_in_105",
+            "whatsappInboundMessage": {
+                "id": "yw_in_105",
+                "from": "+573001000005",
+                "to": "+573123725256",
+                "type": "text",
+                "text": {
+                    "body": "Vi esta oferta #CCC05, ¿disponible?"
+                },
+                "sendTime": "2025-12-19T09:02:00Z"
+            }
+        }
+    },
+    {
+        "description": "C6 - Inbound (Sin Hash)",
+        "params": {
+            "project_id": "test-color-tapetes"
+        },
+        "body": {
+            "type": "whatsapp.inbound_message.received",
+            "id": "evt_in_106",
+            "whatsappInboundMessage": {
+                "id": "yw_in_106",
+                "from": "+573001000006",
+                "to": "+573123725256",
+                "type": "text",
+                "text": {
+                    "body": "¿Abren los domingos?"
+                },
+                "sendTime": "2025-12-19T09:17:00Z"
+            }
+        }
+    },
+    {
+        "description": "C7 - Inbound #DDD07",
+        "params": {
+            "project_id": "test-color-tapetes"
+        },
+        "body": {
+            "type": "whatsapp.inbound_message.received",
+            "id": "evt_in_107",
+            "whatsappInboundMessage": {
+                "id": "yw_in_107",
+                "from": "+573001000007",
+                "to": "+573123725256",
+                "type": "text",
+                "text": {
+                    "body": "Problema con pedido #DDD07."
+                },
+                "sendTime": "2025-12-19T09:32:00Z"
+            }
+        }
+    },
+    {
+        "description": "C8 - Inbound #EEE08",
+        "params": {
+            "project_id": "test-color-tapetes"
+        },
+        "body": {
+            "type": "whatsapp.inbound_message.received",
+            "id": "evt_in_108",
+            "whatsappInboundMessage": {
+                "id": "yw_in_108",
+                "from": "+573001000008",
+                "to": "+573123725256",
+                "type": "text",
+                "text": {
+                    "body": "Busco personalizado Ref #EEE08."
+                },
+                "sendTime": "2025-12-19T09:47:00Z"
+            }
+        }
+    },
+    {
+        "description": "C9 - Inbound (Sin Hash)",
+        "params": {
+            "project_id": "test-color-tapetes"
+        },
+        "body": {
+            "type": "whatsapp.inbound_message.received",
+            "id": "evt_in_109",
+            "whatsappInboundMessage": {
+                "id": "yw_in_109",
+                "from": "+573001000009",
+                "to": "+573123725256",
+                "type": "text",
+                "text": {
+                    "body": "¿Cómo limpio el tapete?"
+                },
+                "sendTime": "2025-12-19T10:02:00Z"
+            }
+        }
+    },
+    {
+        "description": "C10 - Inbound (Sin Hash)",
+        "params": {
+            "project_id": "test-color-tapetes"
+        },
+        "body": {
+            "type": "whatsapp.inbound_message.received",
+            "id": "evt_in_110",
+            "whatsappInboundMessage": {
+                "id": "yw_in_110",
+                "from": "+573001000010",
+                "to": "+573123725256",
+                "type": "text",
+                "text": {
+                    "body": "Necesito asesoría."
+                },
+                "sendTime": "2025-12-19T10:17:00Z"
+            }
+        }
+    }
+]

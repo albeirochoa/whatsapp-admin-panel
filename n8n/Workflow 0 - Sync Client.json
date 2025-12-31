@@ -1,0 +1,176 @@
+{
+  "name": "Workflow 0 - Sync Client",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "sync-client",
+        "options": {
+          "responseData": "{\"status\":\"queued\"}"
+        }
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        544,
+        -240
+      ],
+      "id": "b9673e06-ab53-4afa-8529-26fb5b34aaaa",
+      "name": "Webhook Sync Client",
+      "webhookId": "7cb2ea1f-c02b-41fc-8c5b-dcd040a03c57"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.headers['x-api-key'] || $json.headers['X-API-Key'] }}",
+              "value2": "sync_client_prod_2035_x9aK"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        784,
+        -240
+      ],
+      "id": "auth-validator-node",
+      "name": "Validate API Key"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Map payload\nconst body = $json.body || $json;\n\n// Normalizar teléfono a formato E.164 (+57...)\nfunction normalizePhone(phone) {\n  if (!phone) return '';\n  let clean = phone.replace(/[^0-9+]/g, '');\n  if (!clean.startsWith('+')) clean = '+' + clean;\n  return clean;\n}\n\nconst payload = {\n  project_id: body.project_id,\n  client_name: body.client_name || body.project_id || 'unknown',\n  status: body.status || 'active',\n  phone_filter: normalizePhone(body.phone_filter),\n  prompt_template: body.prompt_template || '',\n  conversion_config: body.conversion_config || null,\n  openai_model: body.openai_model || 'gpt-4o-mini',\n  openai_temperature: Number(body.openai_temperature) || 0.3,\n  openai_max_tokens: Number(body.openai_max_tokens) || 150,\n  click_matching_window_days: Number(body.click_matching_window_days) || 60,\n  message_limit_per_conversation: Number(body.message_limit_per_conversation) || 15,\n  sheet_spreadsheet_id: body.sheet_spreadsheet_id || '',\n  sheet_messages_name: body.sheet_messages_name || 'chats_raw',\n  sheet_conversions_name: body.sheet_conversions_name || 'conversions'\n};\n\nif (!payload.project_id) {\n  throw new Error('project_id is required');\n}\n\nreturn [{ json: payload }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1024,
+        -320
+      ],
+      "id": "14b61336-3638-4906-875a-fbb8ea2bbd55",
+      "name": "Validate & Map"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"error\": \"Unauthorized: invalid x-api-key\" } }}",
+        "responseCode": 401,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        1024,
+        -160
+      ],
+      "id": "unauthorized-response-node",
+      "name": "Respond Unauthorized"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO clients_config (\n  project_id,\n  client_name,\n  status,\n  phone_filter,\n  prompt_template,\n  conversion_config,\n  openai_model,\n  openai_temperature,\n  openai_max_tokens,\n  click_matching_window_days,\n  message_limit_per_conversation,\n  sheet_spreadsheet_id,\n  sheet_messages_name,\n  sheet_conversions_name\n) VALUES (\n  $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14\n)\nON CONFLICT (project_id) DO UPDATE SET\n  client_name = EXCLUDED.client_name,\n  status = EXCLUDED.status,\n  phone_filter = EXCLUDED.phone_filter,\n  prompt_template = EXCLUDED.prompt_template,\n  conversion_config = EXCLUDED.conversion_config,\n  openai_model = EXCLUDED.openai_model,\n  openai_temperature = EXCLUDED.openai_temperature,\n  openai_max_tokens = EXCLUDED.openai_max_tokens,\n  click_matching_window_days = EXCLUDED.click_matching_window_days,\n  message_limit_per_conversation = EXCLUDED.message_limit_per_conversation,\n  sheet_spreadsheet_id = EXCLUDED.sheet_spreadsheet_id,\n  sheet_messages_name = EXCLUDED.sheet_messages_name,\n  sheet_conversions_name = EXCLUDED.sheet_conversions_name\nRETURNING project_id;",
+        "options": {
+          "queryReplacement": "={{ [$json.project_id, $json.client_name, $json.status, $json.phone_filter, $json.prompt_template, $json.conversion_config, $json.openai_model, $json.openai_temperature, $json.openai_max_tokens, $json.click_matching_window_days, $json.message_limit_per_conversation, $json.sheet_spreadsheet_id, $json.sheet_messages_name, $json.sheet_conversions_name] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1072,
+        -160
+      ],
+      "id": "bc7a4970-b3bb-4cf5-9b57-4bde2c0b2301",
+      "name": "Upsert clients_config",
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "8YJV6aXkwW8GDwrM",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"success\": true, \"project_id\": $json.project_id } }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        1312,
+        -304
+      ],
+      "id": "8581ea8e-a2b3-413a-85c5-dfeda6195801",
+      "name": "Respond Success"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook Sync Client": {
+      "main": [
+        [
+          {
+            "node": "Validate API Key",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate API Key": {
+      "main": [
+        [
+          {
+            "node": "Validate & Map",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Unauthorized",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate & Map": {
+      "main": [
+        [
+          {
+            "node": "Upsert clients_config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert clients_config": {
+      "main": [
+        [
+          {
+            "node": "Respond Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "55bc6f1a-9934-4a99-a01c-988d6fcc5dcf",
+  "meta": {
+    "instanceId": "9f13993b16e067a82e6fa160e42190313629bb8b43c55648e41e8daa553c28a9"
+  },
+  "id": "94q88z3rqgCvWnAy",
+  "tags": []
+}

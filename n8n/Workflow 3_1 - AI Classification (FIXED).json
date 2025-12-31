@@ -1,0 +1,983 @@
+{
+  "name": "Workflow 3 - AI Classification (FIXED)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -40256,
+        -7488
+      ],
+      "id": "e41e44e4-232d-4fca-912a-58c54600c21b",
+      "name": "Every 5 Minutes"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH ranked AS (\n  SELECT\n    e.*,\n    c.client_name,\n    c.prompt_template,\n    c.conversion_config,\n    c.openai_model,\n    c.openai_temperature,\n    c.openai_max_tokens,\n    c.click_matching_window_days,\n    c.message_limit_per_conversation,\n    c.sheet_spreadsheet_id,\n    c.sheet_conversions_name,\n    ROW_NUMBER() OVER (\n      PARTITION BY e.project_id, e.phone_e164\n      ORDER BY e.ts ASC\n    ) AS rn\n  FROM events e\n  JOIN clients_config c ON e.project_id = c.project_id\n  WHERE e.event_type IN ('message_in','message_out')\n    AND e.processed_at IS NULL\n    AND (e.retry_count IS NULL OR e.retry_count < 3)\n    AND c.status = 'active'\n)\nSELECT\n  event_id, project_id, phone_e164, ts,\n  message_text, direction,\n  click_id_hash,\n  (payload_raw->>'extracted_email') AS lead_email,\n  (payload_raw->>'extracted_name') AS lead_name,\n  client_name, prompt_template, conversion_config,\n  openai_model, openai_temperature, openai_max_tokens,\n  click_matching_window_days,\n  message_limit_per_conversation,\n  sheet_spreadsheet_id, sheet_conversions_name\nFROM ranked\nWHERE rn <= 50\nORDER BY rn, project_id, phone_e164, ts\nLIMIT 500;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -40016,
+        -7488
+      ],
+      "id": "68fe0687-227b-46a4-908d-076c8915eebc",
+      "name": "Get Pending Messages",
+      "credentials": {
+        "postgres": {
+          "id": "8YJV6aXkwW8GDwrM",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "check-has-items",
+              "leftValue": "={{ $input.all().length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -39776,
+        -7488
+      ],
+      "id": "94203b0d-bb58-4d9b-8654-ca6a89c3b442",
+      "name": "Has Messages?"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================\n// AGRUPAR MENSAJES POR PROJECT_ID + PHONE\n// Mode: Run Once for All Items\n// ============================================\n\nconst items = $input.all();\nconst groups = {};\n\nconsole.log('?? Total mensajes recibidos:', items.length);\n\nfor (const item of items) {\n  const key = `${item.json.project_id}:${item.json.phone_e164}`;\n\n  if (!groups[key]) {\n    // Parsear conversion_config si viene como string\n    let conversionConfig = item.json.conversion_config;\n    if (typeof conversionConfig === 'string') {\n      try {\n        conversionConfig = JSON.parse(conversionConfig);\n      } catch (e) {\n        conversionConfig = {\n          \"1\": { \"name\": \"no_qualified\", \"value\": 0, \"currency\": \"COP\" },\n          \"2\": { \"name\": \"lead_qualified\", \"value\": 15000, \"currency\": \"COP\" },\n          \"3\": { \"name\": \"sale_confirmed\", \"value\": 85000, \"currency\": \"COP\" }\n        };\n      }\n    }\n\n    groups[key] = {\n      project_id: item.json.project_id,\n      phone_e164: item.json.phone_e164,\n      config: {\n        client_name: item.json.client_name,\n        prompt_template: item.json.prompt_template,\n        conversion_config: conversionConfig,\n        openai_model: item.json.openai_model || 'gpt-4o-mini',\n        openai_temperature: parseFloat(item.json.openai_temperature) || 0.3,\n        openai_max_tokens: parseInt(item.json.openai_max_tokens) || 150,\n        click_matching_window_days: parseInt(item.json.click_matching_window_days) || 60,\n        message_limit_per_conversation: parseInt(item.json.message_limit_per_conversation) || 15,\n        sheet_spreadsheet_id: item.json.sheet_spreadsheet_id,\n        sheet_conversions_name: item.json.sheet_conversions_name || 'conversions'\n      },\n      messages: [],\n      event_ids: []\n    };\n  }\n\n  groups[key].messages.push({\n    ts: item.json.ts,\n    text: item.json.message_text || '',\n    direction: item.json.direction,\n    click_id_hash: item.json.click_id_hash || null,\n    lead_email: item.json.lead_email || null,\n    lead_name: item.json.lead_name || null\n  });\n\n  groups[key].event_ids.push(item.json.event_id);\n}\n\nconst result = Object.values(groups);\nconsole.log('?? Grupos creados:', result.length);\n\nreturn result.map(group => ({ json: group }));\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -39536,
+        -7616
+      ],
+      "id": "fda88783-64ac-4774-b074-a6b31b3cb181",
+      "name": "Group by Phone"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// ============================================\n// PROCESAR CONVERSACI?N\n// Mode: Run Once for Each Item\n// ============================================\n\nconst group = $input.item.json;\n\nconsole.log('\\n=== Procesando ===');\nconsole.log('Project:', group.project_id);\nconsole.log('Phone:', group.phone_e164);\n\nif (!group.messages || !Array.isArray(group.messages)) {\n  throw new Error('No messages array. Keys: ' + Object.keys(group).join(', '));\n}\n\nif (!group.config || !group.config.prompt_template) {\n  throw new Error('No config.prompt_template. Config keys: ' + Object.keys(group.config || {}).join(', '));\n}\n\nconst messages = group.messages;\n\nif (messages.length === 0) {\n  console.log('?? Sin mensajes');\n  return {\n    ...group,\n    aggregated_conversation: '[No hay mensajes]',\n    message_count: 0,\n    message_count_total: 0,\n    first_message_ts: new Date().toISOString(),\n    last_message_ts: new Date().toISOString(),\n    click_id_hash: null,\n    lead_email: null,\n    lead_name: null,\n    click_data: null,\n    has_click: false\n  };\n}\n\nconst sortedMessages = [...messages].sort((a, b) => new Date(a.ts) - new Date(b.ts));\n\nconst first_message_ts = sortedMessages[0].ts;\nconst last_message_ts = sortedMessages[sortedMessages.length - 1].ts;\n\n// Ventana reciente para reducir tokens\nconst DEFAULT_MAX_MESSAGES = 15;\nconst HARD_CAP_MESSAGES = 30;\nconst configuredMax = parseInt(group.config.message_limit_per_conversation);\nconst MAX_MESSAGES = Math.min(\n  Math.max(Number.isFinite(configuredMax) ? configuredMax : DEFAULT_MAX_MESSAGES, 1),\n  HARD_CAP_MESSAGES\n);\nconst recentMessages = sortedMessages.slice(-MAX_MESSAGES);\n\nconst conversation = recentMessages\n  .map(m => {\n    const direction = m.direction === 'in' ? 'CLIENTE' : 'AGENTE';\n    const text = m.text && m.text.trim() ? m.text : '[Multimedia/Sin texto]';\n    return `${direction}: ${text}`;\n  })\n  .join('\\n');\n\nconsole.log('Mensajes total:', sortedMessages.length, ' | usados:', recentMessages.length);\nconsole.log('? Conversaci?n:', conversation.length, 'chars');\n\n// Rate limiting: 500ms entre items\nawait new Promise(resolve => setTimeout(resolve, 500));\n\n// Extraer click_id_hash/email/nombre del primer inbound (o del primero disponible)\nconst firstInboundMsg = sortedMessages.find(m => m.direction === 'in') || sortedMessages[0];\nconst click_id_hash = firstInboundMsg?.click_id_hash || null;\n\nconst lead_email = (\n  sortedMessages.find(m => m.direction === 'in' && m.lead_email)?.lead_email ||\n  sortedMessages.find(m => m.lead_email)?.lead_email ||\n  null\n);\n\nconst lead_name = (\n  sortedMessages.find(m => m.direction === 'in' && m.lead_name)?.lead_name ||\n  sortedMessages.find(m => m.lead_name)?.lead_name ||\n  null\n);\n\nconsole.log('Click ID Hash:', click_id_hash);\nif (lead_email) console.log('Lead Email:', lead_email);\nif (lead_name) console.log('Lead Name:', lead_name);\n\nreturn {\n  project_id: group.project_id,\n  phone_e164: group.phone_e164,\n  config: group.config,\n  event_ids: group.event_ids,\n  aggregated_conversation: conversation,\n  message_count: recentMessages.length,\n  message_count_total: sortedMessages.length,\n  first_message_ts,\n  last_message_ts,\n  click_id_hash,\n  lead_email,\n  lead_name,\n  click_data: null,\n  has_click: false\n};\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -39360,
+        -8080
+      ],
+      "id": "50960edd-b483-419e-a166-ee80e5ef6c40",
+      "name": "Process Conversation"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n  $1::text AS project_id,\n  $4::text AS phone_e164,\n  e.event_id AS click_event_id,\n  e.click_id,\n  e.click_id_type,\n  e.click_id_hash,\n  e.ts AS click_ts,\n  e.landing_url\nFROM (SELECT 1) d\nLEFT JOIN events e ON e.project_id = $1\n  AND e.click_id_hash = $2\n  AND e.event_type = 'click'\n  AND e.ts < $3\n  AND e.ts >= NOW() - ($5 || ' days')::interval\nORDER BY e.ts DESC\nLIMIT 1;",
+        "options": {
+          "queryReplacement": "={{ [$json.project_id, $json.click_id_hash, $json.first_message_ts, $json.phone_e164, $json.config.click_matching_window_days || 7] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -39040,
+        -8096
+      ],
+      "id": "7109fae6-4915-4304-bdc0-f802673ef004",
+      "name": "Find Click",
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "8YJV6aXkwW8GDwrM",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// ============================================\n// MERGE: Combinar conversación con click\n// ============================================\n\nconst lookup = $input.item.json;\nconst allConvos = $('Process Conversation').all();\n\n// Get matched convo using pairing or index fallback\nlet convo;\ntry { convo = $('Process Conversation').json; } catch(e) {}\nif (!convo || convo.phone_e164 !== lookup.phone_e164) {\n  convo = allConvos.find(c => c.json.project_id === lookup.project_id && c.json.phone_e164 === lookup.phone_e164)?.json || allConvos[$input.itemIndex]?.json;\n}\n\nif (!convo) {\n  throw new Error(`No conversation found matched in Merge Click Data for ${lookup.project_id}:${lookup.phone_e164}`);\n}\n\n// Verificar si hay click válido\nlet click_data = null;\nlet has_click = false;\n\nif (lookup.click_event_id) {\n  click_data = lookup;\n  has_click = true;\n} \n\nreturn {\n  ...convo,\n  click_data,\n  has_click\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -38800,
+        -8016
+      ],
+      "id": "1bed8908-ac58-498c-b462-3f9149b14904",
+      "name": "Merge Click Data"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4o-mini",
+          "mode": "list",
+          "cachedResultName": "GPT-4O-MINI"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "={{ $json.config.prompt_template }}",
+              "role": "system"
+            },
+            {
+              "content": "=Conversación de WhatsApp:\n\n{{ $json.aggregated_conversation }}\n\nClasifica esta conversación según las reglas definidas. Responde SOLO con el JSON."
+            }
+          ]
+        },
+        "options": {
+          "maxTokens": 150,
+          "temperature": 0.3
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.8,
+      "position": [
+        -38560,
+        -8064
+      ],
+      "id": "b4aeb4ac-7957-4586-8ab9-9dc02662a829",
+      "name": "Classify with OpenAI",
+      "credentials": {
+        "openAiApi": {
+          "id": "AJExvdlTweeZ6ZpW",
+          "name": "OpenAi_Leadsignal"
+        }
+      },
+      "continueOnFail": true,
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// ============================================\n// PARSE AI RESPONSE + USER IDENTIFIERS (SHA-256)\n// ============================================\n\nfunction sha256(ascii) {\n  function rightRotate(value, amount) {\n    return (value >>> amount) | (value << (32 - amount));\n  }\n  const mathPow = Math.pow;\n  const maxWord = mathPow(2, 32);\n  let result = '';\n  const words = [];\n  const asciiBitLength = ascii.length * 8;\n  let hash = sha256.h || [];\n  let k = sha256.k || [];\n  let primeCounter = k.length;\n  const isComposite = {};\n  for (let candidate = 2; primeCounter < 64; candidate++) {\n    if (!isComposite[candidate]) {\n      for (let i = 0; i < 313; i += candidate) {\n        isComposite[i] = candidate;\n      }\n      hash[primeCounter] = (mathPow(candidate, 0.5) * maxWord) | 0;\n      k[primeCounter++] = (mathPow(candidate, 1 / 3) * maxWord) | 0;\n    }\n  }\n  sha256.h = hash;\n  sha256.k = k;\n  ascii += '';\n  while (ascii.length % 64 - 56) ascii += '\u0000';\n  for (let i = 0; i < ascii.length; i++) {\n    const j = ascii.charCodeAt(i);\n    words[i >> 2] |= j << ((3 - i) % 4) * 8;\n  }\n  words[words.length] = (asciiBitLength / maxWord) | 0;\n  words[words.length] = asciiBitLength;\n  for (let j = 0; j < words.length; ) {\n    const w = words.slice(j, (j += 16));\n    const oldHash = hash;\n    hash = hash.slice(0, 8);\n    for (let i = 0; i < 64; i++) {\n      const w15 = w[i - 15], w2 = w[i - 2];\n      const a = hash[0], e = hash[4];\n      const temp1 = hash[7] + (rightRotate(e, 6) ^ rightRotate(e, 11) ^ rightRotate(e, 25)) + ((e & hash[5]) ^ (~e & hash[6])) + k[i] + (w[i] = i < 16 ? w[i] : (w[i - 16] + (rightRotate(w15, 7) ^ rightRotate(w15, 18) ^ (w15 >>> 3)) + w[i - 7] + (rightRotate(w2, 17) ^ rightRotate(w2, 19) ^ (w2 >>> 10))) | 0);\n      const temp2 = (rightRotate(a, 2) ^ rightRotate(a, 13) ^ rightRotate(a, 22)) + ((a & hash[1]) ^ (a & hash[2]) ^ (hash[1] & hash[2]));\n      hash = [(temp1 + temp2) | 0].concat(hash);\n      hash[4] = (hash[4] + temp1) | 0;\n      hash.pop();\n    }\n    for (let i = 0; i < 8; i++) hash[i] = (hash[i] + oldHash[i]) | 0;\n  }\n  for (let i = 0; i < 8; i++) {\n    for (let j = 3; j + 1; j--) {\n      const b = (hash[i] >> (j * 8)) & 255;\n      result += (b < 16 ? '0' : '') + b.toString(16);\n    }\n  }\n  return result;\n}\n\nfunction normalizeEmail(email) {\n  if (!email) return null;\n  return String(email).trim().toLowerCase() || null;\n}\n\nfunction normalizePhoneE164(phone) {\n  if (!phone) return null;\n  return String(phone).trim() || null;\n}\n\nconst item = $input.item.json;\nconst convo_data = item;\nconst event_ids = Array.isArray(convo_data.event_ids) ? convo_data.event_ids : [];\nconst openai_error =\n  item.error?.message ||\n  item.error?.description ||\n  item.errorMessage ||\n  item.error_description ||\n  null;\n\nif (!convo_data || !convo_data.phone_e164) {\n  return {\n    __error: true,\n    error_message: 'Missing conversation data',\n    event_ids,\n    project_id: convo_data?.project_id || null,\n    phone_e164: convo_data?.phone_e164 || null\n  };\n}\n\nif (openai_error) {\n  return {\n    __error: true,\n    error_message: `OpenAI error: ${openai_error}`,\n    event_ids,\n    project_id: convo_data.project_id,\n    phone_e164: convo_data.phone_e164\n  };\n}\n\nconst content = item.message?.content || item.choices?.[0]?.message?.content || null;\nif (!content || typeof content !== 'string') {\n  return {\n    __error: true,\n    error_message: 'OpenAI response missing content',\n    event_ids,\n    project_id: convo_data.project_id,\n    phone_e164: convo_data.phone_e164\n  };\n}\n\nlet ai_result;\ntry {\n  const cleanContent = content.replace(/```json\\n?/g, '').replace(/```\\n?/g, '').trim();\n  ai_result = JSON.parse(cleanContent);\n  if (typeof ai_result.label === 'undefined') ai_result.label = 1;\n  if (typeof ai_result.confidence === 'undefined') ai_result.confidence = 0.5;\n  if (!ai_result.reason) ai_result.reason = 'Clasificacion automatica';\n  if (![1, 2, 3].includes(ai_result.label)) ai_result.label = 1;\n} catch (error) {\n  return {\n    __error: true,\n    error_message: 'Error parsing: ' + error.message,\n    event_ids,\n    project_id: convo_data.project_id,\n    phone_e164: convo_data.phone_e164\n  };\n}\n\nconst convConfig = convo_data.config?.conversion_config;\nif (!convConfig) {\n  return {\n    __error: true,\n    error_message: 'Missing conversion_config',\n    event_ids,\n    project_id: convo_data.project_id,\n    phone_e164: convo_data.phone_e164\n  };\n}\n\nconst conversion_config = convConfig[ai_result.label.toString()] || { name: 'unknown', value: 0, currency: 'COP' };\nconst conversion_id = `conv_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;\n// FIX 2025-12-22: external_attrib_id CON conversion_name\n// Permite múltiples TIPOS de conversión por número (no_qualified, lead_qualified, sale_confirmed)\n// Pero previene duplicados del MISMO tipo\nconst external_attrib_id = `conv-${convo_data.project_id}-${convo_data.phone_e164}-${conversion_config.name}`;\n\nlet attribution_method = 'organic';\nif (convo_data.click_data && convo_data.click_data.click_id) {\n  attribution_method = convo_data.click_data.click_id_hash ? 'click_id_hash_match' : 'click_id_match';\n}\n\nconst lead_email = normalizeEmail(convo_data.lead_email);\nconst email_sha256 = lead_email ? sha256(lead_email) : null;\nconst phone_sha256 = normalizePhoneE164(convo_data.phone_e164) ? sha256(normalizePhoneE164(convo_data.phone_e164)) : null;\n\nreturn {\n  conversion_id,\n  project_id: convo_data.project_id,\n  phone_e164: convo_data.phone_e164,\n  click_event_id: convo_data.click_data?.click_event_id || null,\n  click_id: convo_data.click_data?.click_id || null,\n  click_id_type: convo_data.click_data?.click_id_type || null,\n  attribution_method,\n  ai_label: ai_result.label,\n  ai_confidence: ai_result.confidence,\n  ai_reason: ai_result.reason,\n  ai_model_used: convo_data.config.openai_model || 'gpt-4o-mini',\n  conversion_name: conversion_config.name,\n  conversion_value: conversion_config.value,\n  conversion_currency: conversion_config.currency || 'COP',\n  conversion_time: new Date().toISOString(),\n  external_attrib_id,\n  aggregated_conversation: convo_data.aggregated_conversation,\n  message_count: convo_data.message_count,\n  first_message_ts: convo_data.first_message_ts,\n  last_message_ts: convo_data.last_message_ts,\n  event_ids: convo_data.event_ids,\n  config: convo_data.config,\n  lead_email,\n  lead_name: (convo_data.lead_name && String(convo_data.lead_name).trim()) || null,\n  email_sha256,\n  phone_sha256\n};\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -38208,
+        -6944
+      ],
+      "id": "45f4bdfe-2875-4cff-86b4-aa876d2ec4c1",
+      "name": "Parse AI Response"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO conversions (\n  conversion_id,\n  project_id,\n  phone_e164,\n  click_event_id,\n  click_id,\n  click_id_type,\n  attribution_method,\n  ai_label,\n  ai_confidence,\n  ai_reason,\n  ai_model_used,\n  conversion_name,\n  conversion_value,\n  conversion_currency,\n  conversion_time,\n  external_attrib_id,\n  aggregated_conversation,\n  message_count,\n  first_message_ts,\n  last_message_ts,\n  lead_email,\n  email_sha256,\n  phone_sha256,\n  lead_name,\n  status,\n  created_at\n) VALUES (\n  $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,'pending',NOW()\n)\nON CONFLICT (external_attrib_id) DO NOTHING\nRETURNING conversion_id;",
+        "options": {
+          "queryReplacement": "={{ [$json.conversion_id, $json.project_id, $json.phone_e164, $json.click_event_id, $json.click_id, $json.click_id_type, $json.attribution_method, $json.ai_label, $json.ai_confidence, $json.ai_reason, $json.ai_model_used, $json.conversion_name, $json.conversion_value, $json.conversion_currency, $json.conversion_time, $json.external_attrib_id, $json.aggregated_conversation.substring(0, 5000), $json.message_count, $json.first_message_ts, $json.last_message_ts, $json.lead_email, $json.email_sha256, $json.phone_sha256, $json.lead_name] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -38096,
+        -7728
+      ],
+      "id": "f2bf5fd4-8835-472f-a482-1e72676e134e",
+      "name": "Save Conversion",
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "8YJV6aXkwW8GDwrM",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Preparar event_ids para marcar como procesados\nconst data = $input.item.json;\n\nif (!data || !data.event_ids) {\n  return { success: false, message: 'No event_ids', event_ids_array: [] };\n}\n\nreturn {\n  event_ids_array: data.event_ids,\n  count: data.event_ids.length\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -37504,
+        -8048
+      ],
+      "id": "baf62750-cffa-4d49-89f5-b7f92bbdc6f5",
+      "name": "Prepare Update"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE events\nSET processed_at = NOW()\nWHERE event_id = ANY($1::text[])\nRETURNING event_id;",
+        "options": {
+          "queryReplacement": "={{ [$json.event_ids_array] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -37616,
+        -7728
+      ],
+      "id": "a9dbbe26-bb2a-48ec-acb4-97c27f4c87f1",
+      "name": "Mark as Processed",
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "8YJV6aXkwW8GDwrM",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Preparar fila para Google Sheets\nconst data = $input.item.json;\n\nif (!data) {\n  throw new Error('No input data');\n}\n\nconst formatDate = (isoString) => {\n  const date = new Date(isoString);\n  return date.toISOString().replace('T', ' ').substring(0, 19) + '-05:00';\n};\n\nconst labelMap = {\n  1: 'No Calificado',\n  2: 'Lead Calificado',\n  3: 'Venta Confirmada'\n};\n\nreturn {\n  click_id: data.click_id || '',\n  conversion_name: data.conversion_name,\n  conversion_time: formatDate(data.conversion_time),\n  conversion_value: data.conversion_value,\n  conversion_currency: data.conversion_currency,\n  phone_e164: data.phone_e164,\n  ai_reason: data.ai_reason,\n  ai_confidence: Math.round(data.ai_confidence * 100) / 100,\n  external_attrib_id: data.external_attrib_id,\n  label_text: labelMap[data.ai_label] || 'Unknown',\n  lead_name: data.lead_name || '',\n  email_sha256: data.email_sha256 || '',\n  phone_sha256: data.phone_sha256 || '',\n  sheet_spreadsheet_id: data.config.sheet_spreadsheet_id,\n  sheet_name: data.config.sheet_conversions_name || 'conversions'\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -38016,
+        -7120
+      ],
+      "id": "1084bbe9-694f-4bbc-9421-7d975d79b57e",
+      "name": "Prepare for Sheets"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $json.sheet_spreadsheet_id }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "={{ $json.sheet_name }}",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Google Click ID": "={{ $json.click_id }}",
+            "Conversion Name": "={{ $json.conversion_name }}",
+            "Conversion Time": "={{ $json.conversion_time }}",
+            "Conversion Value": "={{ $json.conversion_value }}",
+            "Conversion Currency": "={{ $json.conversion_currency }}",
+            "phone_e164": "={{ $json.phone_e164 }}",
+            "ai_reason": "={{ $json.ai_reason }}",
+            "ai_confidence": "={{ $json.ai_confidence }}",
+            "external_attrib_id": "={{ $json.external_attrib_id }}",
+            "lead_name": "={{ $json.lead_name }}",
+            "email_sha256": "={{ $json.email_sha256 }}",
+            "phone_sha256": "={{ $json.phone_sha256 }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Google Click ID",
+              "displayName": "Google Click ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Conversion Name",
+              "displayName": "Conversion Name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Conversion Time",
+              "displayName": "Conversion Time",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Conversion Value",
+              "displayName": "Conversion Value",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Conversion Currency",
+              "displayName": "Conversion Currency",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "phone_e164",
+              "displayName": "phone_e164",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ai_reason",
+              "displayName": "ai_reason",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ai_confidence",
+              "displayName": "ai_confidence",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "external_attrib_id",
+              "displayName": "external_attrib_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "lead_name",
+              "displayName": "lead_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "email_sha256",
+              "displayName": "email_sha256",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "phone_sha256",
+              "displayName": "phone_sha256",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -37600,
+        -6976
+      ],
+      "id": "00a902c8-201b-48f9-b655-4de6cafffc4c",
+      "name": "Append to Sheets",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "cTxVw7JPxAQjJZR5",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        -39536,
+        -7376
+      ],
+      "id": "711bfb41-b87e-4ac4-83d9-9ca822b46f00",
+      "name": "No Messages"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n  $1::text AS project_id,\n  $2::text AS phone_e164,\n  (SELECT click_id_hash FROM lead_attribution WHERE project_id = $1 AND phone_e164 = $2 AND expires_at > NOW() ORDER BY updated_at DESC LIMIT 1) AS stored_click_id_hash,\n  (SELECT expires_at FROM lead_attribution WHERE project_id = $1 AND phone_e164 = $2 AND expires_at > NOW() ORDER BY updated_at DESC LIMIT 1) AS stored_expires_at;",
+        "options": {
+          "queryReplacement": "={{ [$json.project_id, $json.phone_e164] }}"
+        }
+      },
+      "id": "3c60601e-a53a-43b4-ae88-1f19dd500fa6",
+      "name": "Lookup Attribution",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -39184,
+        -7616
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "8YJV6aXkwW8GDwrM",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// ============================================\n// MERGE ATTRIBUTION (stored click_id_hash)\n// Mode: Run Once for Each Item\n// ============================================\n\nconst lookup = $input.item.json;\nconst allConvos = $('Process Conversation').all();\n\n// Get matched convo using pairing or index fallback\nlet convo;\ntry { convo = $('Process Conversation').json; } catch(e) {}\nif (!convo || convo.phone_e164 !== lookup.phone_e164) {\n  convo = allConvos.find(c => c.json.project_id === lookup.project_id && c.json.phone_e164 === lookup.phone_e164)?.json || allConvos[$input.itemIndex]?.json;\n}\n\nif (!convo) {\n  throw new Error(`No convo matched in Merge Attribution for ${lookup.project_id}:${lookup.phone_e164}`);\n}\n\nconst storedClickIdHash = lookup.stored_click_id_hash || null;\n\nlet click_id_hash = convo.click_id_hash || null;\nlet click_id_hash_source = null;\n\nif (click_id_hash) {\n  click_id_hash_source = 'message';\n} else if (storedClickIdHash) {\n  click_id_hash = storedClickIdHash;\n  click_id_hash_source = 'stored';\n}\n\nreturn {\n  ...convo,\n  click_id_hash,\n  click_id_hash_source\n};"
+      },
+      "id": "19c2a441-0b44-4838-aa5a-be5efd780ba5",
+      "name": "Merge Attribution",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -38944,
+        -7616
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "has-click-hash",
+              "leftValue": "{{ $json.click_id_hash }}",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              },
+              "rightValue": "message"
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "685c5044-c6ce-4cbf-9a14-ff41bb0ba29a",
+      "name": "Has Click Hash?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -38768,
+        -7312
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO lead_attribution (\n  project_id,\n  phone_e164,\n  click_id_hash,\n  first_click_ts,\n  last_message_ts,\n  expires_at,\n  updated_at\n) VALUES (\n  $1,$2,$3,$4,$5, NOW() + ($6 || ' days')::interval, NOW()\n)\nON CONFLICT (project_id, phone_e164) DO UPDATE SET\n  click_id_hash = EXCLUDED.click_id_hash,\n  first_click_ts = LEAST(lead_attribution.first_click_ts, EXCLUDED.first_click_ts),\n  last_message_ts = EXCLUDED.last_message_ts,\n  expires_at = EXCLUDED.expires_at,\n  updated_at = NOW()\nRETURNING project_id;",
+        "options": {
+          "queryReplacement": "={{ [$json.project_id, $json.phone_e164, $json.click_id_hash, $json.first_message_ts, $json.last_message_ts, $json.config.click_matching_window_days] }}"
+        }
+      },
+      "id": "e11688ec-e5aa-478e-bd5f-57b0ae45a5bf",
+      "name": "Upsert Attribution",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -38496,
+        -6944
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "8YJV6aXkwW8GDwrM",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n  $1::text AS project_id,\n  $2::text AS phone_e164,\n  e.ai_label AS cache_ai_label,\n  e.ai_confidence AS cache_ai_confidence,\n  e.ai_reason AS cache_ai_reason,\n  e.conversion_name AS cache_conversion_name,\n  e.conversion_value AS cache_conversion_value,\n  e.conversion_currency AS cache_conversion_currency,\n  e.ai_model_used AS cache_ai_model_used\nFROM (SELECT 1) d\nLEFT JOIN conversions e ON e.project_id = $1\n  AND e.phone_e164 = $2\n  AND e.last_message_ts = $3\n  AND e.message_count = $4\nORDER BY e.created_at DESC\nLIMIT 1;",
+        "options": {
+          "queryReplacement": "={{ [$json.project_id, $json.phone_e164, $json.last_message_ts, $json.message_count] }}"
+        }
+      },
+      "id": "608ee44e-b2e5-4f8d-9cd1-f624d40362d4",
+      "name": "Lookup Cached Conversion",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -38656,
+        -7616
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "8YJV6aXkwW8GDwrM",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// ============================================\n// CACHE GATE (merge cache + conversation data)\n// Mode: Run Once for Each Item\n// ============================================\n\nconst lookup = $input.item.json;\nconst allConvos = $('Merge Click Data').all();\n\n// Get matched convo using pairing or index fallback\nlet convo;\ntry { convo = $('Merge Click Data').json; } catch(e) {}\nif (!convo || convo.phone_e164 !== lookup.phone_e164) {\n  convo = allConvos.find(c => c.json.project_id === lookup.project_id && c.json.phone_e164 === lookup.phone_e164)?.json || allConvos[$input.itemIndex]?.json;\n}\n\nif (!convo) {\n  throw new Error(`No conversation found matched in Cache Gate for ${lookup.project_id}:${lookup.phone_e164}`);\n}\n\nconst hasCache = lookup.cache_ai_label !== undefined && lookup.cache_ai_label !== null;\n\nconst cache = hasCache ? {\n  ai_label: lookup.cache_ai_label,\n  ai_confidence: lookup.cache_ai_confidence,\n  ai_reason: lookup.cache_ai_reason,\n  conversion_name: lookup.cache_conversion_name,\n  conversion_value: lookup.cache_conversion_value,\n  conversion_currency: lookup.cache_conversion_currency,\n  ai_model_used: lookup.cache_ai_model_used\n} : null;\n\nreturn {\n  ...convo,\n  cache,\n  has_cache: hasCache\n};"
+      },
+      "id": "68e5262d-6dee-4f3d-9923-3d52267ab214",
+      "name": "Cache Gate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -38416,
+        -7616
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "has-cache",
+              "leftValue": "={{ $json.has_cache }}",
+              "operator": {
+                "operation": "equals",
+                "type": "boolean"
+              },
+              "rightValue": true
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "0304a1bc-cc2d-4fa2-bc80-dd0e5e9e1c37",
+      "name": "Cache Hit?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -38176,
+        -7488
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// ============================================\n// USE CACHED RESULT (no OpenAI call)\n// ============================================\n\nfunction sha256(ascii) {\n  function rightRotate(value, amount) {\n    return (value >>> amount) | (value << (32 - amount));\n  }\n\n  const mathPow = Math.pow;\n  const maxWord = mathPow(2, 32);\n  let result = '';\n\n  const words = [];\n  const asciiBitLength = ascii.length * 8;\n\n  let hash = sha256.h || [];\n  let k = sha256.k || [];\n  let primeCounter = k.length;\n\n  const isComposite = {};\n  for (let candidate = 2; primeCounter < 64; candidate++) {\n    if (!isComposite[candidate]) {\n      for (let i = 0; i < 313; i += candidate) {\n        isComposite[i] = candidate;\n      }\n      hash[primeCounter] = (mathPow(candidate, 0.5) * maxWord) | 0;\n      k[primeCounter++] = (mathPow(candidate, 1 / 3) * maxWord) | 0;\n    }\n  }\n\n  sha256.h = hash;\n  sha256.k = k;\n\n  ascii += '\\x80';\n  while (ascii.length % 64 - 56) ascii += '\\x00';\n  for (let i = 0; i < ascii.length; i++) {\n    const j = ascii.charCodeAt(i);\n    words[i >> 2] |= j << ((3 - i) % 4) * 8;\n  }\n  words[words.length] = (asciiBitLength / maxWord) | 0;\n  words[words.length] = asciiBitLength;\n\n  for (let j = 0; j < words.length; ) {\n    const w = words.slice(j, (j += 16));\n    const oldHash = hash;\n    hash = hash.slice(0, 8);\n\n    for (let i = 0; i < 64; i++) {\n      const w15 = w[i - 15], w2 = w[i - 2];\n\n      const a = hash[0], e = hash[4];\n      const temp1 =\n        hash[7] +\n        (rightRotate(e, 6) ^ rightRotate(e, 11) ^ rightRotate(e, 25)) +\n        ((e & hash[5]) ^ (~e & hash[6])) +\n        k[i] +\n        (w[i] =\n          i < 16\n            ? w[i]\n            : (w[i - 16] +\n                (rightRotate(w15, 7) ^ rightRotate(w15, 18) ^ (w15 >>> 3)) +\n                w[i - 7] +\n                (rightRotate(w2, 17) ^ rightRotate(w2, 19) ^ (w2 >>> 10))) |\n              0);\n      const temp2 =\n        (rightRotate(a, 2) ^ rightRotate(a, 13) ^ rightRotate(a, 22)) +\n        ((a & hash[1]) ^ (a & hash[2]) ^ (hash[1] & hash[2]));\n\n      hash = [(temp1 + temp2) | 0].concat(hash);\n      hash[4] = (hash[4] + temp1) | 0;\n      hash.pop();\n    }\n\n    for (let i = 0; i < 8; i++) {\n      hash[i] = (hash[i] + oldHash[i]) | 0;\n    }\n  }\n\n  for (let i = 0; i < 8; i++) {\n    for (let j = 3; j + 1; j--) {\n      const b = (hash[i] >> (j * 8)) & 255;\n      result += (b < 16 ? 0 : '') + b.toString(16);\n    }\n  }\n  return result;\n}\n\nfunction normalizeEmail(email) {\n  if (!email) return null;\n  const trimmed = String(email).trim().toLowerCase();\n  return trimmed || null;\n}\n\nfunction normalizePhoneE164(phone) {\n  if (!phone) return null;\n  const trimmed = String(phone).trim();\n  return trimmed || null;\n}\n\nconst data = $input.item.json;\nif (!data.cache) {\n  throw new Error('Cache data missing');\n}\n\nconst cache = data.cache;\nconst conversion_id = `conv_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;\n// FIX 2025-12-22: external_attrib_id CON conversion_name\nconst external_attrib_id = `conv-${data.project_id}-${data.phone_e164}-${cache.conversion_name}`;\n\nlet attribution_method = 'organic';\nif (data.click_data && data.click_data.click_id) {\n  attribution_method = data.click_data.click_id_hash ? 'click_id_hash_match' : 'click_id_match';\n}\n\nconst lead_email = normalizeEmail(data.lead_email);\nconst lead_name = (data.lead_name && String(data.lead_name).trim()) || null;\nconst phone_e164 = normalizePhoneE164(data.phone_e164);\n\nconst email_sha256 = lead_email ? sha256(lead_email) : null;\nconst phone_sha256 = phone_e164 ? sha256(phone_e164) : null;\n\nreturn {\n  conversion_id,\n  project_id: data.project_id,\n  phone_e164: data.phone_e164,\n  click_event_id: data.click_data?.click_event_id || null,\n  click_id: data.click_data?.click_id || null,\n  click_id_type: data.click_data?.click_id_type || null,\n  attribution_method,\n  ai_label: cache.ai_label,\n  ai_confidence: cache.ai_confidence,\n  ai_reason: cache.ai_reason,\n  ai_model_used: cache.ai_model_used || data.config.openai_model || 'gpt-4o-mini',\n  conversion_name: cache.conversion_name,\n  conversion_value: cache.conversion_value,\n  conversion_currency: cache.conversion_currency || 'COP',\n  conversion_time: new Date().toISOString(),\n  external_attrib_id,\n  aggregated_conversation: data.aggregated_conversation,\n  message_count: data.message_count,\n  first_message_ts: data.first_message_ts,\n  last_message_ts: data.last_message_ts,\n  event_ids: data.event_ids,\n  config: data.config,\n  lead_email,\n  lead_name,\n  email_sha256,\n  phone_sha256\n};\n"
+      },
+      "id": "daa9934b-1ab0-40e6-979d-67dfbab64b81",
+      "name": "Use Cached Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -37872,
+        -8096
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "has-error",
+              "leftValue": "={{ $json.__error }}",
+              "operator": {
+                "operation": "equals",
+                "type": "boolean"
+              },
+              "rightValue": true
+            }
+          ],
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          }
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -37936,
+        -7360
+      ],
+      "id": "8eba52e4-7410-4eaa-8bea-97d3fa638278",
+      "name": "Has Error?"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Preparar event_ids y error para retry\nconst data = $input.item.json;\n\nconst eventIds = Array.isArray(data.event_ids) ? data.event_ids : [];\nconst rawError = data.error_message || data.error || 'Unknown error';\nconst errorMessage = typeof rawError === 'string' ? rawError : JSON.stringify(rawError);\n\nreturn {\n  event_ids_array: eventIds,\n  error_message: errorMessage,\n  count: eventIds.length\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -37776,
+        -7488
+      ],
+      "id": "543c6fdf-40d5-4f48-b009-cf936aa259f6",
+      "name": "Prepare Retry Update"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE events\nSET retry_count = COALESCE(retry_count, 0) + 1,\n    error_message = $2\nWHERE event_id = ANY($1::text[])\nRETURNING event_id;",
+        "options": {
+          "queryReplacement": "={{ [$json.event_ids_array, $json.error_message] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -37536,
+        -7488
+      ],
+      "id": "53852106-efb9-42f5-9a05-49591174ca89",
+      "name": "Update Retry Count",
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "8YJV6aXkwW8GDwrM",
+          "name": "Postgres account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Every 5 Minutes": {
+      "main": [
+        [
+          {
+            "node": "Get Pending Messages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Pending Messages": {
+      "main": [
+        [
+          {
+            "node": "Has Messages?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Messages?": {
+      "main": [
+        [
+          {
+            "node": "Group by Phone",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Messages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Group by Phone": {
+      "main": [
+        [
+          {
+            "node": "Process Conversation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Conversation": {
+      "main": [
+        [
+          {
+            "node": "Lookup Attribution",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find Click": {
+      "main": [
+        [
+          {
+            "node": "Merge Click Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Click Data": {
+      "main": [
+        [
+          {
+            "node": "Lookup Cached Conversion",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Classify with OpenAI": {
+      "main": [
+        [
+          {
+            "node": "Parse AI Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse AI Response": {
+      "main": [
+        [
+          {
+            "node": "Has Error?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Conversion": {
+      "main": [
+        [
+          {
+            "node": "Prepare Update",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Update": {
+      "main": [
+        [
+          {
+            "node": "Mark as Processed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare for Sheets": {
+      "main": [
+        [
+          {
+            "node": "Append to Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lookup Attribution": {
+      "main": [
+        [
+          {
+            "node": "Merge Attribution",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Attribution": {
+      "main": [
+        [
+          {
+            "node": "Has Click Hash?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Click Hash?": {
+      "main": [
+        [
+          {
+            "node": "Upsert Attribution",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Find Click",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Find Click",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lookup Cached Conversion": {
+      "main": [
+        [
+          {
+            "node": "Cache Gate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cache Gate": {
+      "main": [
+        [
+          {
+            "node": "Cache Hit?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cache Hit?": {
+      "main": [
+        [
+          {
+            "node": "Use Cached Result",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Classify with OpenAI",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Use Cached Result": {
+      "main": [
+        [
+          {
+            "node": "Save Conversion",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Prepare for Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Error?": {
+      "main": [
+        [
+          {
+            "node": "Prepare Retry Update",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Save Conversion",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Prepare for Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Retry Update": {
+      "main": [
+        [
+          {
+            "node": "Update Retry Count",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "95a04aa1-686f-43ce-b241-670753548747",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "9f13993b16e067a82e6fa160e42190313629bb8b43c55648e41e8daa553c28a9"
+  },
+  "id": "u5xgeJVlfU1ccqyw",
+  "tags": []
+}

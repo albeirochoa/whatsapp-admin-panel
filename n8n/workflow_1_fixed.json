@@ -1,0 +1,116 @@
+{
+  "name": "Konversion Web - FIXED",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "4843cac6-8188-4ac2-b178-2a9faf226fab",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [0, 100],
+      "id": "webhook-node",
+      "name": "Webhook",
+      "webhookId": "4843cac6-8188-4ac2-b178-2a9faf226fab"
+    },
+    {
+      "parameters": {
+        "jsCode": "let body = $json.body;\n\n// Si viene como string, lo convertimos a objeto\nif (typeof body === 'string') {\n  try {\n    body = JSON.parse(body);\n  } catch (e) {\n    return [{ ...$json, parsed_error: 'Body is not valid JSON', raw_body: $json.body }];\n  }\n}\n\n// Deja el body ya parseado y además crea campos planos\nreturn [{\n  ...$json,\n  body,\n  gclid: body.gclid ?? null,\n  gclid_hash: body.gclid_hash ?? null,\n  phone_e164: body.phone_e164 ?? null,\n  agent_selected: body.agent_selected ?? null,\n  first_click_time_iso: body.first_click_time_iso ?? null,\n  landing_url: body.landing_url ?? null,\n  page_title: body.page_title ?? null,\n  user_agent: body.user_agent ?? null,\n  device_type: body.device_type ?? null,\n  project_id: body.project_id ?? null\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [200, 100],
+      "id": "code-parse",
+      "name": "Parse Body"
+    },
+    {
+      "parameters": {
+        "jsCode": "const crypto = require('crypto');\n\n// Obtener datos del nodo anterior\nconst body = $input.first().json.body;\nconst project_id = body.project_id || 'konversion-web';\nconst phone_e164 = body.phone_e164;\nconst gclid = body.gclid;\nconst gclid_hash = body.gclid_hash;\nconst landing_url = body.landing_url;\nconst first_click_time_iso = body.first_click_time_iso;\n\n// Generar event_id único\nconst event_id = crypto.randomUUID();\n\n// Generar timestamp actual si no viene\nconst ts = first_click_time_iso || new Date().toISOString();\nconst created_at = new Date().toISOString();\n\n// Preparar query con valores escapados\nconst query = `\nINSERT INTO events (\n  event_id,\n  project_id,\n  event_type,\n  phone_e164,\n  ts,\n  click_id,\n  click_id_type,\n  click_id_hash,\n  landing_url,\n  traffic_source,\n  payload_raw,\n  created_at\n) VALUES (\n  $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12\n)\nON CONFLICT (event_id) DO NOTHING\nRETURNING event_id;\n`;\n\n// Preparar parámetros\nconst params = [\n  event_id,\n  project_id,\n  'click',\n  phone_e164,\n  ts,\n  gclid,\n  'gclid',\n  gclid_hash,\n  landing_url || null,\n  'google_ads',\n  JSON.stringify(body),\n  created_at\n];\n\n// Retornar query y params para el nodo Postgres\nreturn {\n  query,\n  params,\n  // Pasar todos los datos originales para el nodo de Sheets\n  body\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [400, 100],
+      "id": "code-prepare-sql",
+      "name": "Prepare SQL"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "={{ $json.query }}",
+        "options": {
+          "queryReplacement": "={{ $json.params }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [600, 100],
+      "id": "postgres-insert",
+      "name": "Insert to Postgres",
+      "credentials": {
+        "postgres": {
+          "id": "8YJV6aXkwW8GDwrM",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1lvM3HHcbfv1hWpatJUs5QvITS4QsQB7SXUIfm9ERCSI",
+          "mode": "list",
+          "cachedResultName": "N8N Sistema_Conversiones_WhatsApp"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 86924823,
+          "mode": "list",
+          "cachedResultName": "clicks"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "gclid": "={{ $('Prepare SQL').item.json.body.gclid }}",
+            "gclid_hash": "={{ $('Prepare SQL').item.json.body.gclid_hash }}",
+            "whatsapp_business_phone": "={{ $('Prepare SQL').item.json.body.phone_e164 }}",
+            "first_click_time_iso": "={{ $('Prepare SQL').item.json.body.first_click_time_iso }}",
+            "landing_url": "={{ $('Prepare SQL').item.json.body.landing_url }}",
+            "source": "={{ $('Prepare SQL').item.json.body.source ?? 'google_ads' }}"
+          }
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [800, 100],
+      "id": "sheets-append",
+      "name": "Append to Sheets",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "cTxVw7JPxAQjJZR5",
+          "name": "Google Sheets account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [[{ "node": "Parse Body", "type": "main", "index": 0 }]]
+    },
+    "Parse Body": {
+      "main": [[{ "node": "Prepare SQL", "type": "main", "index": 0 }]]
+    },
+    "Prepare SQL": {
+      "main": [[{ "node": "Insert to Postgres", "type": "main", "index": 0 }]]
+    },
+    "Insert to Postgres": {
+      "main": [[{ "node": "Append to Sheets", "type": "main", "index": 0 }]]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

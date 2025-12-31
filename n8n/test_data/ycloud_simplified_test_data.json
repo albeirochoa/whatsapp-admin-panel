@@ -1,0 +1,65 @@
+[
+    {
+        "description": "C1 - Inbound with email and hash #AAA01",
+        "params": {
+            "project_id": "test-color-tapetes"
+        },
+        "body": {
+            "type": "whatsapp.inbound_message.received",
+            "id": "evt_in_201",
+            "whatsappInboundMessage": {
+                "id": "yw_in_201",
+                "from": "+573002000001",
+                "to": "+573123725256",
+                "fromName": "Maria Gonzalez",
+                "type": "text",
+                "text": {
+                    "body": "Hola! Me interesa la alfombra persa Ref: #AAA01. Mi email es maria.gonzalez@gmail.com"
+                },
+                "sendTime": "2025-12-20T10:00:00Z"
+            }
+        }
+    },
+    {
+        "description": "C1 - Second message (no hash)",
+        "params": {
+            "project_id": "test-color-tapetes"
+        },
+        "body": {
+            "type": "whatsapp.inbound_message.received",
+            "id": "evt_in_202",
+            "whatsappInboundMessage": {
+                "id": "yw_in_202",
+                "from": "+573002000001",
+                "to": "+573123725256",
+                "fromName": "Maria Gonzalez",
+                "type": "text",
+                "text": {
+                    "body": "Envio a Bogota?"
+                },
+                "sendTime": "2025-12-20T10:05:00Z"
+            }
+        }
+    },
+    {
+        "description": "C2 - Inbound with hash #BBB02",
+        "params": {
+            "project_id": "test-color-tapetes"
+        },
+        "body": {
+            "type": "whatsapp.inbound_message.received",
+            "id": "evt_in_203",
+            "whatsappInboundMessage": {
+                "id": "yw_in_203",
+                "from": "+573002000002",
+                "to": "+573123725256",
+                "profileName": "Carlos Ruiz",
+                "type": "text",
+                "text": {
+                    "body": "Codigo #BBB02. Contacto: carlos.ruiz@hotmail.com"
+                },
+                "sendTime": "2025-12-20T10:10:00Z"
+            }
+        }
+    }
+]

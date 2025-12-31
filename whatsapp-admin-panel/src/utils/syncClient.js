@@ -13,15 +13,55 @@ export const syncClientConfig = async ({
     return { success: false, error: 'Configuración de sync incompleta' };
   }
 
-  const primaryPhone = (config && config.phone_filter) || (agents[0] && agents[0].phone) || '';
+  const formatPhone = (p) => {
+    if (!p) return '';
+    const clean = p.toString().replace(/\s+/g, '').replace('+', '');
+    return clean ? `+${clean}` : '';
+  };
+
+  const primaryPhone = formatPhone((config && config.phone_filter) || (agents[0] && agents[0].phone) || '');
+
+  // --- ENSAMBLADO AUTOMÁTICO DEL PROMPT ---
+  const businessDesc = config?.business_description || 'un negocio';
+  const conversions = config?.conversion_config || {};
+
+  let labelInstructions = '';
+  let hasDynamicValue = false;
+
+  Object.entries(conversions).forEach(([label, data]) => {
+    labelInstructions += `Label ${label} - ${data.name}:\n${data.criteria || 'Sin criterios definidos.'}\n\n`;
+    if (data.use_dynamic_value) hasDynamicValue = true;
+  });
+
+  const basePrompt = `Eres un asistente experto que clasifica conversaciones de WhatsApp para ${businessDesc}.
+  
+Tus opciones de clasificación son:
+${labelInstructions}${config?.prompt_template ? `Instrucciones adicionales:\n${config.prompt_template}` : ''}`;
+
+  const TECHNICAL_PROMPT_SUFFIX = `\n\n---
+      IMPORTANTE (INSTRUCCIONES DE SISTEMA):
+      1. EXTRACCIÓN DE EMAIL: Si el cliente proporciona su correo en la charla, extráelo en "lead_email".
+      2. VALOR DINÁMICO: ${hasDynamicValue ? 'Busca activamente valores monetarios de venta mencionados por el cliente o el agente.' : 'Usa el valor por defecto configurado para cada label.'} Extráelo como número con punto decimal en "value".
+      3. FORMATO DE RESPUESTA: Responde ÚNICAMENTE con un objeto JSON válido, sin markdown ni texto extra.
+      
+      Estructura de respuesta:
+      {
+        "label": 1,
+        "value": 0,
+        "lead_email": "...",
+        "confidence": 0.95,
+        "reason": "..."
+      }`;
+
+  const fullPrompt = `${basePrompt}${TECHNICAL_PROMPT_SUFFIX}`;
 
   const payload = {
     project_id: projectId,
     client_name: projectName || projectId,
     status: 'active',
     phone_filter: primaryPhone,
-    prompt_template: config?.prompt_template || '',
-    conversion_config: config?.conversion_config || null,
+    prompt_template: fullPrompt,
+    conversion_config: conversions,
     openai_model: config?.openai_model || 'gpt-4o-mini',
     openai_temperature: config?.openai_temperature ?? 0.3,
     openai_max_tokens: config?.openai_max_tokens ?? 150,
@@ -33,7 +73,7 @@ export const syncClientConfig = async ({
     agents: agents.map((a) => ({
       id: a.id || null,
       name: a.name || '',
-      phone: a.phone || '',
+      phone: formatPhone(a.phone),
       role: a.role || ''
     }))
   };

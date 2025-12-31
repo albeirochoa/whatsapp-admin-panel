@@ -386,9 +386,7 @@
             "ai_reason": "={{ $json.ai_reason }}",
             "ai_confidence": "={{ $json.ai_confidence }}"
           },
-          "matchingColumns": [
-            "external_attrib_id"
-          ],
+          "matchingColumns": ["external_attrib_id"],
           "schema": [
             {
               "id": "external_attrib_id",
@@ -465,42 +463,6 @@
             {
               "id": "ai_confidence",
               "displayName": "ai_confidence",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "canBeUsedToMatch": true
-            },
-            {
-              "id": "lead_name",
-              "displayName": "lead_name",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "canBeUsedToMatch": true
-            },
-            {
-              "id": "lead_email",
-              "displayName": "lead_email",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "canBeUsedToMatch": true
-            },
-            {
-              "id": "email_sha256",
-              "displayName": "email_sha256",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "canBeUsedToMatch": true
-            },
-            {
-              "id": "phone_sha256",
-              "displayName": "phone_sha256",
               "required": false,
               "defaultMatch": false,
               "display": true,

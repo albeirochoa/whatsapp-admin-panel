@@ -1,0 +1,306 @@
+{
+    "name": "Workflow 1 - Click Ingest",
+    "nodes": [
+        {
+            "parameters": {
+                "httpMethod": "POST",
+                "path": "click/:project_id",
+                "responseMode": "responseNode",
+                "options": {}
+            },
+            "type": "n8n-nodes-base.webhook",
+            "typeVersion": 2.1,
+            "position": [
+                0,
+                0
+            ],
+            "id": "webhook-click-uuid",
+            "name": "Click Webhook",
+            "webhookId": "click-webhook-uuid"
+        },
+        {
+            "parameters": {
+                "jsCode": "// Obtener project_id de la URL\nconst project_id = $input.first().json.params?.project_id || 'unknown';\nconst body = $input.first().json.body;\n\n// Si body viene como string, parsearlo\nlet payload = body;\nif (typeof body === 'string') {\n  try {\n    payload = JSON.parse(body);\n  } catch (e) {\n    throw new Error('Body is not valid JSON: ' + e.message);\n  }\n}\n\n// Validar campos requeridos\nif (!payload.phone_e164) {\n  throw new Error('Missing required field: phone_e164');\n}\n\n// Normalizar teléfono a E.164\nfunction normalizePhone(phone) {\n  if (!phone) return null;\n  let clean = phone.replace(/[^0-9+]/g, '');\n  if (!clean.startsWith('+')) clean = '+' + clean;\n  return clean;\n}\n\n// Generar event_id único\nconst event_id = `evt_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;\n\n// Timestamp\nconst ts = payload.first_click_time_iso || new Date().toISOString();\n\nreturn {\n  project_id,\n  event_id,\n  phone_e164: normalizePhone(payload.phone_e164),\n  ts,\n  click_id: payload.gclid || payload.click_id || null,\n  click_id_type: payload.gclid ? 'gclid' : (payload.gbraid ? 'gbraid' : (payload.wbraid ? 'wbraid' : 'unknown')),\n  click_id_hash: payload.gclid_hash || null,\n  landing_url: payload.landing_url || null,\n  traffic_source: payload.source || 'google_ads',\n  agent_selected: payload.agent_selected || null,\n  page_title: payload.page_title || null,\n  user_agent: payload.user_agent || null,\n  device_type: payload.device_type || null,\n  payload_raw: JSON.stringify(payload)\n};"
+            },
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                220,
+                0
+            ],
+            "id": "parse-click-uuid",
+            "name": "Parse Click"
+        },
+        {
+            "parameters": {
+                "operation": "executeQuery",
+                "query": "SELECT\n  project_id,\n  client_name,\n  status,\n  phone_filter,\n  sheet_spreadsheet_id,\n  sheet_clicks_name\nFROM clients_config\nWHERE project_id = $1\nLIMIT 1;",
+                "options": {
+                    "queryReplacement": "={{ [$json.project_id] }}"
+                }
+            },
+            "type": "n8n-nodes-base.postgres",
+            "typeVersion": 2.6,
+            "position": [
+                440,
+                0
+            ],
+            "id": "get-config-uuid",
+            "name": "Get Config",
+            "credentials": {
+                "postgres": {
+                    "id": "8YJV6aXkwW8GDwrM",
+                    "name": "Postgres account"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "conditions": {
+                    "options": {
+                        "caseSensitive": true,
+                        "leftValue": "",
+                        "typeValidation": "strict"
+                    },
+                    "conditions": [
+                        {
+                            "id": "check-active",
+                            "leftValue": "={{ $json.status }}",
+                            "rightValue": "active",
+                            "operator": {
+                                "type": "string",
+                                "operation": "equals"
+                            }
+                        }
+                    ],
+                    "combinator": "and"
+                },
+                "options": {}
+            },
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 2.2,
+            "position": [
+                660,
+                0
+            ],
+            "id": "check-status-uuid",
+            "name": "Is Active?"
+        },
+        {
+            "parameters": {
+                "jsCode": "// Obtener datos del nodo Parse Click y Config\nconst click = $('Parse Click').first().json;\nconst config = $('Get Config').first().json;\n\n// Preparar query SQL\nconst query = `\nINSERT INTO events (\n  event_id,\n  project_id,\n  event_type,\n  phone_e164,\n  customer_phone_e164,\n  business_phone_e164,\n  ts,\n  click_id,\n  click_id_type,\n  click_id_hash,\n  landing_url,\n  traffic_source,\n  payload_raw,\n  processed_at,\n  created_at\n) VALUES (\n  $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15\n)\nON CONFLICT (event_id) DO NOTHING\nRETURNING event_id;\n`;\n\nconst params = [\n  click.event_id,\n  click.project_id,\n  'click',\n  click.phone_e164,\n  null,\n  click.phone_e164,\n  click.ts,\n  click.click_id,\n  click.click_id_type,\n  click.click_id_hash,\n  click.landing_url,\n  click.traffic_source,\n  click.payload_raw,\n  null,\n  new Date().toISOString()\n];\n\nreturn {\n  query,\n  params,\n  // Para Sheets\n  click_id: click.click_id || '',\n  click_id_hash: click.click_id_hash || '',\n  phone_e164: click.phone_e164,\n  ts: click.ts,\n  landing_url: click.landing_url || '',\n  traffic_source: click.traffic_source,\n  project_id: click.project_id,\n  sheet_spreadsheet_id: config.sheet_spreadsheet_id,\n  sheet_clicks_name: config.sheet_clicks_name || 'clicks'\n};"
+            },
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                880,
+                0
+            ],
+            "id": "prepare-sql-uuid",
+            "name": "Prepare SQL"
+        },
+        {
+            "parameters": {
+                "operation": "executeQuery",
+                "query": "={{ $json.query }}",
+                "options": {
+                    "queryReplacement": "={{ $json.params }}"
+                }
+            },
+            "type": "n8n-nodes-base.postgres",
+            "typeVersion": 2.6,
+            "position": [
+                1100,
+                -100
+            ],
+            "id": "insert-postgres-uuid",
+            "name": "Insert to Postgres",
+            "credentials": {
+                "postgres": {
+                    "id": "8YJV6aXkwW8GDwrM",
+                    "name": "Postgres account"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "jsCode": "// Preparar solo campos necesarios para Sheets\nconst data = $('Prepare SQL').first().json;\n\nreturn {\n  click_id: data.click_id,\n  click_id_hash: data.click_id_hash,\n  phone_e164: data.phone_e164,\n  timestamp: data.ts,\n  landing_url: data.landing_url,\n  source: data.traffic_source,\n  sheet_spreadsheet_id: data.sheet_spreadsheet_id,\n  sheet_clicks_name: data.sheet_clicks_name\n};"
+            },
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                1100,
+                100
+            ],
+            "id": "filter-sheets-uuid",
+            "name": "Filter for Sheets"
+        },
+        {
+            "parameters": {
+                "operation": "append",
+                "documentId": {
+                    "__rl": true,
+                    "value": "={{ $json.sheet_spreadsheet_id }}",
+                    "mode": "id"
+                },
+                "sheetName": {
+                    "__rl": true,
+                    "value": "={{ $json.sheet_clicks_name }}",
+                    "mode": "name"
+                },
+                "columns": {
+                    "mappingMode": "autoMapInputData"
+                },
+                "options": {}
+            },
+            "type": "n8n-nodes-base.googleSheets",
+            "typeVersion": 4.7,
+            "position": [
+                1320,
+                100
+            ],
+            "id": "append-sheets-uuid",
+            "name": "Append to Sheets",
+            "credentials": {
+                "googleSheetsOAuth2Api": {
+                    "id": "cTxVw7JPxAQjJZR5",
+                    "name": "Google Sheets account"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "respondWith": "json",
+                "responseBody": "={{ { \"success\": true, \"event_id\": $('Insert to Postgres').item.json.event_id || 'created', \"project_id\": $('Parse Click').item.json.project_id, \"timestamp\": $now.toISO() } }}",
+                "options": {}
+            },
+            "type": "n8n-nodes-base.respondToWebhook",
+            "typeVersion": 1,
+            "position": [
+                1540,
+                0
+            ],
+            "id": "respond-uuid",
+            "name": "Respond to Webhook"
+        },
+        {
+            "parameters": {
+                "respondWith": "json",
+                "responseBody": "={{ { \"success\": false, \"error\": \"Project not active or not found\", \"project_id\": $('Parse Click').item.json.project_id } }}",
+                "options": {
+                    "responseCode": 403
+                }
+            },
+            "type": "n8n-nodes-base.respondToWebhook",
+            "typeVersion": 1,
+            "position": [
+                880,
+                200
+            ],
+            "id": "respond-error-uuid",
+            "name": "Respond Error"
+        }
+    ],
+    "pinData": {},
+    "connections": {
+        "Click Webhook": {
+            "main": [
+                [
+                    {
+                        "node": "Parse Click",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Parse Click": {
+            "main": [
+                [
+                    {
+                        "node": "Get Config",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Get Config": {
+            "main": [
+                [
+                    {
+                        "node": "Is Active?",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Is Active?": {
+            "main": [
+                [
+                    {
+                        "node": "Prepare SQL",
+                        "type": "main",
+                        "index": 0
+                    }
+                ],
+                [
+                    {
+                        "node": "Respond Error",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Prepare SQL": {
+            "main": [
+                [
+                    {
+                        "node": "Insert to Postgres",
+                        "type": "main",
+                        "index": 0
+                    },
+                    {
+                        "node": "Filter for Sheets",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Insert to Postgres": {
+            "main": [
+                [
+                    {
+                        "node": "Respond to Webhook",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Filter for Sheets": {
+            "main": [
+                [
+                    {
+                        "node": "Append to Sheets",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
+    },
+    "active": false,
+    "settings": {
+        "executionOrder": "v1"
+    },
+    "versionId": "workflow-1-click-ingest-v2",
+    "meta": {
+        "instanceId": "9f13993b16e067a82e6fa160e42190313629bb8b43c55648e41e8daa553c28a9"
+    },
+    "id": "workflow-1-click-ingest",
+    "tags": []
+}

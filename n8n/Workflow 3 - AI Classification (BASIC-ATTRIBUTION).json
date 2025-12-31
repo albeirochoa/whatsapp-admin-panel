@@ -1,5 +1,5 @@
 {
-  "name": "Workflow 3 - AI Classification (BASIC-WITH-ATTRIBUTION)",
+  "name": "Workflow 3 - AI Classification (FIXED)",
   "nodes": [
     {
       "parameters": {
@@ -104,9 +104,9 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "SELECT\n  event_id as click_event_id,\n  click_id,\n  click_id_type,\n  click_id_hash,\n  ts as click_ts,\n  landing_url\nFROM events\nWHERE project_id = $1\n  AND (\n    (click_id_hash = $4 AND click_id_hash IS NOT NULL)\n    OR phone_e164 = $2\n  )\n  AND event_type = 'click'\n  AND ts < $3\n  AND ts >= NOW() - ($5 || ' days')::interval\nORDER BY \n  CASE WHEN click_id_hash = $4 THEN 0 ELSE 1 END,\n  ts DESC\nLIMIT 1;",
+        "query": "SELECT\n  event_id as click_event_id,\n  click_id,\n  click_id_type,\n  click_id_hash,\n  ts as click_ts,\n  landing_url\nFROM events\nWHERE project_id = $1\n  AND (\n    (click_id_hash = $4 AND click_id_hash IS NOT NULL)\n    OR phone_e164 = $2\n  )\n  AND event_type = 'click'\n  AND ts < $3\n  AND ts >= NOW() - INTERVAL '7 days'\nORDER BY \n  CASE WHEN click_id_hash = $4 THEN 0 ELSE 1 END,\n  ts DESC\nLIMIT 1;",
         "options": {
-          "queryReplacement": "={{ [$json.project_id, $json.phone_e164, $json.first_message_ts, $json.click_id_hash, $json.config.click_matching_window_days] }}"
+          "queryReplacement": "={{ [$json.project_id, $json.phone_e164, $json.first_message_ts, $json.click_id_hash] }}"
         }
       },
       "type": "n8n-nodes-base.postgres",
@@ -141,106 +141,10 @@
     },
     {
       "parameters": {
-        "operation": "executeQuery",
-        "query": "SELECT\n  $1::text AS project_id,\n  $2::text AS phone_e164,\n  (SELECT click_id_hash FROM lead_attribution WHERE project_id = $1 AND phone_e164 = $2 AND expires_at > NOW() ORDER BY updated_at DESC LIMIT 1) AS stored_click_id_hash,\n  (SELECT expires_at FROM lead_attribution WHERE project_id = $1 AND phone_e164 = $2 AND expires_at > NOW() ORDER BY updated_at DESC LIMIT 1) AS stored_expires_at;",
-        "options": {
-          "queryReplacement": "={{ [$json.project_id, $json.phone_e164] }}"
-        }
-      },
-      "id": "3c60601e-a53a-43b4-ae88-1f19dd500fa6",
-      "name": "Lookup Attribution",
-      "type": "n8n-nodes-base.postgres",
-      "typeVersion": 2.6,
-      "position": [
-        -20240,
-        -4080
-      ],
-      "alwaysOutputData": true,
-      "credentials": {
-        "postgres": {
-          "id": "8YJV6aXkwW8GDwrM",
-          "name": "Postgres account"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "mode": "runOnceForEachItem",
-        "jsCode": "// ============================================\n// MERGE ATTRIBUTION (stored click_id_hash)\n// Mode: Run Once for Each Item\n// ============================================\n\nconst lookup = $input.item.json;\nconst allConvos = $('Merge Click Data').all();\n\n// Get matched convo using pairing or index fallback\nlet convo;\ntry { convo = $('Merge Click Data').json; } catch(e) {}\nif (!convo || convo.phone_e164 !== lookup.phone_e164) {\n  convo = allConvos.find(c => c.json.project_id === lookup.project_id && c.json.phone_e164 === lookup.phone_e164)?.json || allConvos[$input.itemIndex]?.json;\n}\n\nif (!convo) {\n  throw new Error(`No convo matched in Merge Attribution for ${lookup.project_id}:${lookup.phone_e164}`);\n}\n\nconst storedClickIdHash = lookup.stored_click_id_hash || null;\n\nlet click_id_hash = convo.click_id_hash || null;\nlet click_id_hash_source = null;\n\nif (click_id_hash) {\n  click_id_hash_source = 'message';\n} else if (storedClickIdHash) {\n  click_id_hash = storedClickIdHash;\n  click_id_hash_source = 'stored';\n}\n\nreturn {\n  ...convo,\n  click_id_hash,\n  click_id_hash_source\n};"
-      },
-      "id": "19c2a441-0b44-4838-aa5a-be5efd780ba5",
-      "name": "Merge Attribution",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        -20000,
-        -4080
-      ]
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "strict",
-            "version": 2
-          },
-          "conditions": [
-            {
-              "id": "has-click-hash",
-              "leftValue": "{{ $json.click_id_hash }}",
-              "operator": {
-                "type": "string",
-                "operation": "notEmpty",
-                "singleValue": true
-              },
-              "rightValue": "message"
-            }
-          ],
-          "combinator": "and"
-        },
-        "options": {}
-      },
-      "id": "685c5044-c6ce-4cbf-9a14-ff41bb0ba29a",
-      "name": "Has Click Hash?",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2.2,
-      "position": [
-        -19760,
-        -4080
-      ]
-    },
-    {
-      "parameters": {
-        "operation": "executeQuery",
-        "query": "INSERT INTO lead_attribution (\n  project_id,\n  phone_e164,\n  click_id_hash,\n  first_click_ts,\n  last_message_ts,\n  expires_at,\n  updated_at\n) VALUES (\n  $1,$2,$3,$4,$5, NOW() + ($6 || ' days')::interval, NOW()\n)\nON CONFLICT (project_id, phone_e164) DO UPDATE SET\n  click_id_hash = EXCLUDED.click_id_hash,\n  first_click_ts = LEAST(lead_attribution.first_click_ts, EXCLUDED.first_click_ts),\n  last_message_ts = EXCLUDED.last_message_ts,\n  expires_at = EXCLUDED.expires_at,\n  updated_at = NOW()\nRETURNING project_id;",
-        "options": {
-          "queryReplacement": "={{ [$json.project_id, $json.phone_e164, $json.click_id_hash, $json.first_message_ts, $json.last_message_ts, $json.config.click_matching_window_days] }}"
-        }
-      },
-      "id": "e11688ec-e5aa-478e-bd5f-57b0ae45a5bf",
-      "name": "Upsert Attribution",
-      "type": "n8n-nodes-base.postgres",
-      "typeVersion": 2.6,
-      "position": [
-        -19520,
-        -4240
-      ],
-      "alwaysOutputData": true,
-      "credentials": {
-        "postgres": {
-          "id": "8YJV6aXkwW8GDwrM",
-          "name": "Postgres account"
-        }
-      }
-    },
-    {
-      "parameters": {
         "modelId": {
           "__rl": true,
-          "value": "={{ $json.config.openai_model }}",
-          "mode": "id",
+          "value": "gpt-4o-mini",
+          "mode": "list",
           "cachedResultName": "GPT-4O-MINI"
         },
         "messages": {
@@ -255,8 +159,8 @@
           ]
         },
         "options": {
-          "maxTokens": "={{ $json.config.openai_max_tokens }}",
-          "temperature": "={{ $json.config.openai_temperature }}"
+          "maxTokens": 150,
+          "temperature": 0.3
         }
       },
       "type": "@n8n/n8n-nodes-langchain.openAi",
@@ -277,7 +181,7 @@
     {
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "// ============================================\n// PARSE AI RESPONSE\n// ============================================\n\nconst itemIndex = $itemIndex;\nconst openai_response = $input.item.json;\nconst allMerged = $('Has Click Hash?').all();\nconst convo_data = allMerged[itemIndex]?.json;\n\nif (!convo_data) {\n  throw new Error(`No conversation data at index ${itemIndex}`);\n}\n\nconsole.log('\\n=== Parse AI Response ===');\nconsole.log('Index:', itemIndex);\nconsole.log('Phone:', convo_data.phone_e164);\n\n// Parsear respuesta JSON de OpenAI\nlet ai_result;\ntry {\n  const content = openai_response.message?.content || \n                  openai_response.choices?.[0]?.message?.content || \n                  '{}';\n  \n  // Limpiar backticks de markdown\n  const cleanContent = content\n    .replace(/```json\\n?/g, '')\n    .replace(/```\\n?/g, '')\n    .trim();\n  \n  ai_result = JSON.parse(cleanContent);\n  \n  // Validar campos\n  if (typeof ai_result.label === 'undefined') ai_result.label = 1;\n  if (typeof ai_result.confidence === 'undefined') ai_result.confidence = 0.5;\n  if (!ai_result.reason) ai_result.reason = 'Clasificación automática';\n  \n  // Validar label dinámicamente según conversion_config disponible\n  const convConfig = convo_data.config.conversion_config;\n  const validLabels = Object.keys(convConfig).map(Number);\n  \n  if (!validLabels.includes(ai_result.label)) {\n    console.warn(`⚠️ Label ${ai_result.label} no existe en config. Usando label 1.`);\n    ai_result.label = validLabels.includes(1) ? 1 : validLabels[0];\n  }\n  \n  console.log('✓ AI Label:', ai_result.label, '- Confidence:', ai_result.confidence);\n  \n} catch (error) {\n  console.error('⚠️ Parse error:', error.message);\n  ai_result = {\n    label: 1,\n    confidence: 0.3,\n    reason: 'Error parsing: ' + error.message\n  };\n}\n\n// Config de conversión según label\nconst convConfig = convo_data.config.conversion_config;\nconst conversion_config = convConfig[ai_result.label.toString()] || \n  { name: 'unknown', value: 0, currency: 'USD' };\n\n// Generar IDs\nconst conversion_id = `conv_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;\nconst external_attrib_id = `conv-${convo_data.project_id}-${convo_data.phone_e164}-${conversion_config.name}`;\n\n// Método de atribución\nlet attribution_method = 'organic';\nif (convo_data.click_data && convo_data.click_data.click_id) {\n  attribution_method = convo_data.click_data.click_id_hash \n    ? 'click_id_hash_match' \n    : 'click_id_match';\n}\n\nconsole.log('Attribution:', attribution_method);\n\n// Retornar objeto completo\nreturn {\n  conversion_id,\n  project_id: convo_data.project_id,\n  phone_e164: convo_data.phone_e164,\n  click_event_id: convo_data.click_data?.click_event_id || null,\n  click_id: convo_data.click_data?.click_id || null,\n  click_id_type: convo_data.click_data?.click_id_type || null,\n  attribution_method,\n  ai_label: ai_result.label,\n  ai_confidence: ai_result.confidence,\n  ai_reason: ai_result.reason,\n  ai_model_used: convo_data.config.openai_model || 'gpt-4o-mini',\n  conversion_name: conversion_config.name,\n  conversion_value: conversion_config.value,\n  conversion_currency: conversion_config.currency || 'USD',\n  conversion_time: new Date().toISOString(),\n  external_attrib_id,\n  aggregated_conversation: convo_data.aggregated_conversation,\n  message_count: convo_data.message_count,\n  first_message_ts: convo_data.first_message_ts,\n  last_message_ts: convo_data.last_message_ts,\n  event_ids: convo_data.event_ids,\n  config: convo_data.config\n};"
+        "jsCode": "// ============================================\n// PARSE AI RESPONSE\n// ============================================\n\nconst itemIndex = $itemIndex;\nconst openai_response = $input.item.json;\nconst allMerged = $('Merge Click Data').all();\nconst convo_data = allMerged[itemIndex]?.json;\n\nif (!convo_data) {\n  throw new Error(`No conversation data at index ${itemIndex}`);\n}\n\nconsole.log('\\n=== Parse AI Response ===');\nconsole.log('Index:', itemIndex);\nconsole.log('Phone:', convo_data.phone_e164);\n\n// Parsear respuesta JSON de OpenAI\nlet ai_result;\ntry {\n  const content = openai_response.message?.content || \n                  openai_response.choices?.[0]?.message?.content || \n                  '{}';\n  \n  // Limpiar backticks de markdown\n  const cleanContent = content\n    .replace(/```json\\n?/g, '')\n    .replace(/```\\n?/g, '')\n    .trim();\n  \n  ai_result = JSON.parse(cleanContent);\n  \n  // Validar campos\n  if (typeof ai_result.label === 'undefined') ai_result.label = 1;\n  if (typeof ai_result.confidence === 'undefined') ai_result.confidence = 0.5;\n  if (!ai_result.reason) ai_result.reason = 'Clasificación automática';\n  \n  // Validar label (1-3)\n  if (![1, 2, 3].includes(ai_result.label)) ai_result.label = 1;\n  \n  console.log('✓ AI Label:', ai_result.label, '- Confidence:', ai_result.confidence);\n  \n} catch (error) {\n  console.error('⚠️ Parse error:', error.message);\n  ai_result = {\n    label: 1,\n    confidence: 0.3,\n    reason: 'Error parsing: ' + error.message\n  };\n}\n\n// Config de conversión según label\nconst convConfig = convo_data.config.conversion_config;\nconst conversion_config = convConfig[ai_result.label.toString()] || \n  { name: 'unknown', value: 0, currency: 'COP' };\n\n// Generar IDs\nconst conversion_id = `conv_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;\nconst external_attrib_id = `conv-${convo_data.project_id}-${convo_data.phone_e164}-${ai_result.label}`;\n\n// Método de atribución\nlet attribution_method = 'organic';\nif (convo_data.click_data && convo_data.click_data.click_id) {\n  attribution_method = convo_data.click_data.click_id_hash \n    ? 'click_id_hash_match' \n    : 'click_id_match';\n}\n\nconsole.log('Attribution:', attribution_method);\n\n// Retornar objeto completo\nreturn {\n  conversion_id,\n  project_id: convo_data.project_id,\n  phone_e164: convo_data.phone_e164,\n  click_event_id: convo_data.click_data?.click_event_id || null,\n  click_id: convo_data.click_data?.click_id || null,\n  click_id_type: convo_data.click_data?.click_id_type || null,\n  attribution_method,\n  ai_label: ai_result.label,\n  ai_confidence: ai_result.confidence,\n  ai_reason: ai_result.reason,\n  ai_model_used: convo_data.config.openai_model || 'gpt-4o-mini',\n  conversion_name: conversion_config.name,\n  conversion_value: conversion_config.value,\n  conversion_currency: conversion_config.currency || 'COP',\n  conversion_time: new Date().toISOString(),\n  external_attrib_id,\n  aggregated_conversation: convo_data.aggregated_conversation,\n  message_count: convo_data.message_count,\n  first_message_ts: convo_data.first_message_ts,\n  last_message_ts: convo_data.last_message_ts,\n  event_ids: convo_data.event_ids,\n  config: convo_data.config\n};"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -353,52 +257,45 @@
     {
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "// Los datos ya vienen formateados desde PostgreSQL\n// Agregar valores por defecto para campos que puedan ser null\nconst data = $input.item.json;\nreturn {\n  ...data,\n  sheet_name: data.sheet_name || 'conversions',  // fallback si es null\n  sheet_spreadsheet_id: data.sheet_spreadsheet_id || '',  // fallback si es null\n  click_id: data.click_id || ''  // fallback si es null\n};"
+        "jsCode": "// Preparar fila para Google Sheets\nconst itemIndex = $itemIndex;\nconst allParsed = $('Parse AI Response').all();\nconst data = allParsed[itemIndex]?.json;\n\nif (!data) {\n  throw new Error(`No data at index ${itemIndex}`);\n}\n\n// Formatear timestamp para Google Ads (Colombia UTC-5)\nconst formatDate = (isoString) => {\n  const date = new Date(isoString);\n  return date.toISOString().replace('T', ' ').substring(0, 19) + '-05:00';\n};\n\n// Label a texto\nconst labelMap = {\n  1: 'No Calificado',\n  2: 'Lead Calificado',\n  3: 'Venta Confirmada'\n};\n\nreturn {\n  click_id: data.click_id || '',\n  conversion_name: data.conversion_name,\n  conversion_time: formatDate(data.conversion_time),\n  conversion_value: data.conversion_value,\n  conversion_currency: data.conversion_currency,\n  phone_e164: data.phone_e164,\n  ai_reason: data.ai_reason,\n  ai_confidence: Math.round(data.ai_confidence * 100) / 100,\n  external_attrib_id: data.external_attrib_id,\n  label_text: labelMap[data.ai_label] || 'Unknown',\n  sheet_spreadsheet_id: data.config.sheet_spreadsheet_id,\n  sheet_name: data.config.sheet_conversions_name || 'conversions'\n};"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -19328,
-        -4360
+        -19616,
+        -3952
       ],
       "id": "09947474-23ac-4a42-ab4d-b64dbba8f10c",
       "name": "Prepare for Sheets"
     },
     {
       "parameters": {
-        "operation": "appendOrUpdate",
+        "operation": "append",
         "documentId": {
           "__rl": true,
           "value": "={{ $json.sheet_spreadsheet_id }}",
           "mode": "id"
         },
-        "sheetName": "={{ $json.sheet_name }}",
+        "sheetName": {
+          "__rl": true,
+          "value": "={{ $json.sheet_name }}",
+          "mode": "name"
+        },
         "columns": {
           "mappingMode": "defineBelow",
           "value": {
-            "external_attrib_id": "={{ $json.external_attrib_id }}",
-            "Google Click ID": "={{ $json.click_id || '' }}",
+            "Google Click ID": "={{ $json.click_id }}",
             "Conversion Name": "={{ $json.conversion_name }}",
             "Conversion Time": "={{ $json.conversion_time }}",
             "Conversion Value": "={{ $json.conversion_value }}",
             "Conversion Currency": "={{ $json.conversion_currency }}",
             "phone_e164": "={{ $json.phone_e164 }}",
             "ai_reason": "={{ $json.ai_reason }}",
-            "ai_confidence": "={{ $json.ai_confidence }}"
+            "ai_confidence": "={{ $json.ai_confidence }}",
+            "external_attrib_id": "={{ $json.external_attrib_id }}"
           },
-          "matchingColumns": [
-            "external_attrib_id"
-          ],
+          "matchingColumns": [],
           "schema": [
-            {
-              "id": "external_attrib_id",
-              "displayName": "external_attrib_id",
-              "required": false,
-              "defaultMatch": true,
-              "display": true,
-              "type": "string",
-              "canBeUsedToMatch": true
-            },
             {
               "id": "Google Click ID",
               "displayName": "Google Click ID",
@@ -472,35 +369,8 @@
               "canBeUsedToMatch": true
             },
             {
-              "id": "lead_name",
-              "displayName": "lead_name",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "canBeUsedToMatch": true
-            },
-            {
-              "id": "lead_email",
-              "displayName": "lead_email",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "canBeUsedToMatch": true
-            },
-            {
-              "id": "email_sha256",
-              "displayName": "email_sha256",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "canBeUsedToMatch": true
-            },
-            {
-              "id": "phone_sha256",
-              "displayName": "phone_sha256",
+              "id": "external_attrib_id",
+              "displayName": "external_attrib_id",
               "required": false,
               "defaultMatch": false,
               "display": true,
@@ -520,33 +390,11 @@
         -4272
       ],
       "id": "26b3afd8-3400-4329-8036-3d49932158ca",
-      "name": "Upsert to Sheets",
+      "name": "Append to Sheets",
       "credentials": {
         "googleSheetsOAuth2Api": {
           "id": "cTxVw7JPxAQjJZR5",
           "name": "Google Sheets account"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "operation": "executeQuery",
-        "query": "SELECT \n  COALESCE(c.click_id, '') as click_id,\n  c.conversion_name,\n  TO_CHAR(c.conversion_time AT TIME ZONE 'America/Bogota', 'YYYY-MM-DD HH24:MI:SS-05:00') as conversion_time,\n  c.conversion_value,\n  c.conversion_currency,\n  c.phone_e164,\n  COALESCE(c.ai_reason, '') as ai_reason,\n  ROUND(c.ai_confidence::numeric, 2) as ai_confidence,\n  c.external_attrib_id,\n  COALESCE(p.sheet_spreadsheet_id, '') as sheet_spreadsheet_id,\n  COALESCE(p.sheet_conversions_name, 'conversions') as sheet_name\nFROM conversions c\nJOIN clients_config p ON c.project_id = p.project_id\nWHERE c.conversion_id = ANY(\n  SELECT conversion_id \n  FROM conversions \n  WHERE updated_at >= NOW() - INTERVAL '5 minutes'\n  ORDER BY updated_at DESC\n  LIMIT 100\n);",
-        "options": {}
-      },
-      "type": "n8n-nodes-base.postgres",
-      "typeVersion": 2.6,
-      "position": [
-        -19456,
-        -4464
-      ],
-      "id": "query-recent-conv-001",
-      "name": "Query Recent Conversions",
-      "alwaysOutputData": true,
-      "credentials": {
-        "postgres": {
-          "id": "8YJV6aXkwW8GDwrM",
-          "name": "Postgres account"
         }
       }
     },
@@ -641,61 +489,11 @@
       "main": [
         [
           {
-            "node": "Lookup Attribution",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Lookup Attribution": {
-      "main": [
-        [
-          {
-            "node": "Merge Attribution",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Merge Attribution": {
-      "main": [
-        [
-          {
-            "node": "Has Click Hash?",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Has Click Hash?": {
-      "main": [
-        [
-          {
-            "node": "Upsert Attribution",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "Classify with OpenAI",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
             "node": "Classify with OpenAI",
             "type": "main",
             "index": 0
           }
         ]
-      ]
-    },
-    "Upsert Attribution": {
-      "main": [
-        []
       ]
     },
     "Classify with OpenAI": {
@@ -714,6 +512,11 @@
         [
           {
             "node": "Save Conversion",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Prepare for Sheets",
             "type": "main",
             "index": 0
           }
@@ -742,37 +545,20 @@
         ]
       ]
     },
-    "Mark as Processed": {
-      "main": [
-        [
-          {
-            "node": "Query Recent Conversions",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Query Recent Conversions": {
-      "main": [
-        [
-          {
-            "node": "Prepare for Sheets",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
     "Prepare for Sheets": {
       "main": [
         [
           {
-            "node": "Upsert to Sheets",
+            "node": "Append to Sheets",
             "type": "main",
             "index": 0
           }
         ]
+      ]
+    },
+    "Mark as Processed": {
+      "main": [
+        []
       ]
     }
   },

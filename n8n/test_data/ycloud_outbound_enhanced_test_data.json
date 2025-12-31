@@ -1,0 +1,296 @@
+[
+    {
+        "description": "C1 - Respuesta a María (alfombra persa)",
+        "params": {
+            "project_id": "test-color-tapetes"
+        },
+        "body": {
+            "type": "whatsapp.message.updated",
+            "id": "evt_out_201",
+            "whatsappMessage": {
+                "id": "yw_out_201",
+                "from": "+573123725256",
+                "to": "+573002000001",
+                "type": "text",
+                "text": {
+                    "body": "Hola María! La alfombra persa está en $450.000. Te envío cotización a tu email 📧"
+                },
+                "status": "delivered",
+                "sendTime": "2025-12-20T10:02:00Z"
+            }
+        }
+    },
+    {
+        "description": "C1 - Segunda respuesta sobre envío",
+        "params": {
+            "project_id": "test-color-tapetes"
+        },
+        "body": {
+            "type": "whatsapp.message.updated",
+            "id": "evt_out_202",
+            "whatsappMessage": {
+                "id": "yw_out_202",
+                "from": "+573123725256",
+                "to": "+573002000001",
+                "type": "text",
+                "text": {
+                    "body": "El envío a Bogotá es GRATIS en compras superiores a $300.000 🚚"
+                },
+                "status": "delivered",
+                "sendTime": "2025-12-20T10:06:00Z"
+            }
+        }
+    },
+    {
+        "description": "C2 - Respuesta a Carlos",
+        "params": {
+            "project_id": "test-color-tapetes"
+        },
+        "body": {
+            "type": "whatsapp.message.updated",
+            "id": "evt_out_203",
+            "whatsappMessage": {
+                "id": "yw_out_203",
+                "from": "+573123725256",
+                "to": "+573002000002",
+                "type": "text",
+                "text": {
+                    "body": "Hola Carlos! El tapete moderno está en oferta: $280.000 c/u. En 2 unidades te doy descuento 💰"
+                },
+                "status": "delivered",
+                "sendTime": "2025-12-20T10:12:00Z"
+            }
+        }
+    },
+    {
+        "description": "C2 - Confirmación de compra",
+        "params": {
+            "project_id": "test-color-tapetes"
+        },
+        "body": {
+            "type": "whatsapp.message.updated",
+            "id": "evt_out_204",
+            "whatsappMessage": {
+                "id": "yw_out_204",
+                "from": "+573123725256",
+                "to": "+573002000002",
+                "type": "text",
+                "text": {
+                    "body": "Perfecto! 2 unidades = $500.000. Sí aceptamos transferencia. Te envío datos bancarios ✅"
+                },
+                "status": "delivered",
+                "sendTime": "2025-12-20T10:16:00Z"
+            }
+        }
+    },
+    {
+        "description": "C3 - Respuesta a Ana (orgánico)",
+        "params": {
+            "project_id": "test-color-tapetes"
+        },
+        "body": {
+            "type": "whatsapp.message.updated",
+            "id": "evt_out_205",
+            "whatsappMessage": {
+                "id": "yw_out_205",
+                "from": "+573123725256",
+                "to": "+573002000003",
+                "type": "text",
+                "text": {
+                    "body": "Hola Ana! Estamos en Bogotá, Calle 100 #15-20. Horario: Lun-Sab 9am-6pm 📍"
+                },
+                "status": "delivered",
+                "sendTime": "2025-12-20T10:22:00Z"
+            }
+        }
+    },
+    {
+        "description": "C4 - Respuesta a Pedro (tapete infantil)",
+        "params": {
+            "project_id": "test-color-tapetes"
+        },
+        "body": {
+            "type": "whatsapp.message.updated",
+            "id": "evt_out_206",
+            "whatsappMessage": {
+                "id": "yw_out_206",
+                "from": "+573123725256",
+                "to": "+573002000004",
+                "type": "text",
+                "text": {
+                    "body": "Hola Pedro! Tapete infantil 2x3m en $320.000. Te envío catálogo completo a tu email 📨"
+                },
+                "status": "delivered",
+                "sendTime": "2025-12-20T10:27:00Z"
+            }
+        }
+    },
+    {
+        "description": "C5 - Respuesta a Laura (oferta)",
+        "params": {
+            "project_id": "test-color-tapetes"
+        },
+        "body": {
+            "type": "whatsapp.message.updated",
+            "id": "evt_out_207",
+            "whatsappMessage": {
+                "id": "yw_out_207",
+                "from": "+573123725256",
+                "to": "+573002000005",
+                "type": "text",
+                "text": {
+                    "body": "Sí Laura! La oferta #CCC05 sigue vigente: 30% descuento. $210.000 en vez de $300.000 🎉"
+                },
+                "status": "delivered",
+                "sendTime": "2025-12-20T10:32:00Z"
+            }
+        }
+    },
+    {
+        "description": "C5 - Respuesta de seguimiento",
+        "params": {
+            "project_id": "test-color-tapetes"
+        },
+        "body": {
+            "type": "whatsapp.message.updated",
+            "id": "evt_out_208",
+            "whatsappMessage": {
+                "id": "yw_out_208",
+                "from": "+573123725256",
+                "to": "+573002000005",
+                "type": "text",
+                "text": {
+                    "body": "De nada! Cualquier duda me avisas 😊"
+                },
+                "status": "delivered",
+                "sendTime": "2025-12-20T10:36:00Z"
+            }
+        }
+    },
+    {
+        "description": "C6 - Respuesta a Roberto",
+        "params": {
+            "project_id": "test-color-tapetes"
+        },
+        "body": {
+            "type": "whatsapp.message.updated",
+            "id": "evt_out_209",
+            "whatsappMessage": {
+                "id": "yw_out_209",
+                "from": "+573123725256",
+                "to": "+573002000006",
+                "type": "text",
+                "text": {
+                    "body": "No Roberto, solo abrimos Lun-Sab. Domingos cerrado 🚫"
+                },
+                "status": "delivered",
+                "sendTime": "2025-12-20T10:42:00Z"
+            }
+        }
+    },
+    {
+        "description": "C7 - Respuesta a Sofía (queja)",
+        "params": {
+            "project_id": "test-color-tapetes"
+        },
+        "body": {
+            "type": "whatsapp.message.updated",
+            "id": "evt_out_210",
+            "whatsappMessage": {
+                "id": "yw_out_210",
+                "from": "+573123725256",
+                "to": "+573002000007",
+                "type": "text",
+                "text": {
+                    "body": "Lamento el inconveniente Sofía. ¿Qué pasó con tu pedido? Te ayudo a solucionarlo 🔧"
+                },
+                "status": "delivered",
+                "sendTime": "2025-12-20T10:47:00Z"
+            }
+        }
+    },
+    {
+        "description": "C8 - Respuesta a Andrés (venta)",
+        "params": {
+            "project_id": "test-color-tapetes"
+        },
+        "body": {
+            "type": "whatsapp.message.updated",
+            "id": "evt_out_211",
+            "whatsappMessage": {
+                "id": "yw_out_211",
+                "from": "+573123725256",
+                "to": "+573002000008",
+                "type": "text",
+                "text": {
+                    "body": "Excelente Andrés! Tapete personalizado $850.000. Te envío datos para transferencia 💳"
+                },
+                "status": "delivered",
+                "sendTime": "2025-12-20T10:52:00Z"
+            }
+        }
+    },
+    {
+        "description": "C8 - Confirmación de pago recibido",
+        "params": {
+            "project_id": "test-color-tapetes"
+        },
+        "body": {
+            "type": "whatsapp.message.updated",
+            "id": "evt_out_212",
+            "whatsappMessage": {
+                "id": "yw_out_212",
+                "from": "+573123725256",
+                "to": "+573002000008",
+                "type": "text",
+                "text": {
+                    "body": "Pago confirmado! ✅ Tu pedido se entrega en 5 días hábiles. Gracias por tu compra! 🎉"
+                },
+                "status": "delivered",
+                "sendTime": "2025-12-20T10:57:00Z"
+            }
+        }
+    },
+    {
+        "description": "C9 - Respuesta a Juliana (consulta)",
+        "params": {
+            "project_id": "test-color-tapetes"
+        },
+        "body": {
+            "type": "whatsapp.message.updated",
+            "id": "evt_out_213",
+            "whatsappMessage": {
+                "id": "yw_out_213",
+                "from": "+573123725256",
+                "to": "+573002000009",
+                "type": "text",
+                "text": {
+                    "body": "Hola Juliana! Para limpiar usa aspiradora suave y paño húmedo. Evita químicos fuertes 🧹"
+                },
+                "status": "delivered",
+                "sendTime": "2025-12-20T11:02:00Z"
+            }
+        }
+    },
+    {
+        "description": "C10 - Respuesta a Diego (corporativo)",
+        "params": {
+            "project_id": "test-color-tapetes"
+        },
+        "body": {
+            "type": "whatsapp.message.updated",
+            "id": "evt_out_214",
+            "whatsappMessage": {
+                "id": "yw_out_214",
+                "from": "+573123725256",
+                "to": "+573002000010",
+                "type": "text",
+                "text": {
+                    "body": "Hola Diego! Tenemos línea corporativa con descuentos especiales. Te contacto por email para cotización personalizada 📊"
+                },
+                "status": "delivered",
+                "sendTime": "2025-12-20T11:07:00Z"
+            }
+        }
+    }
+]
