@@ -64,6 +64,7 @@ firebase.json       # Config de hosting
 - ✅ Generador de código para copiar
 - ✅ Vista previa del widget
 - ✅ Datos persistentes en Firestore
+- ✅ Tracking avanzado (GTM `whatsapp_click`, `gclid`, `project_id`)
 
 ## 🎨 Personalización
 

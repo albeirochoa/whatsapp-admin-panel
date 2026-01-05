@@ -1,4 +1,12 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
+import {
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  TextField,
+  Button
+} from '@mui/material';
 
 const ProjectModal = ({ onClose, onSave }) => {
   const [projectName, setProjectName] = useState('');
@@ -9,30 +17,30 @@ const ProjectModal = ({ onClose, onSave }) => {
   };
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" onClick={e => e.stopPropagation()}>
-        <h2 className="modal-title">Nuevo Proyecto</h2>
-        <div className="form-group">
-          <label className="form-label">Nombre del proyecto</label>
-          <input
-            type="text"
-            className="form-input"
-            value={projectName}
-            onChange={(e) => setProjectName(e.target.value)}
-            placeholder="Mi sitio web"
-            autoFocus
-          />
-        </div>
-        <div className="modal-actions">
-          <button className="btn-cancel" onClick={onClose}>
-            Cancelar
-          </button>
-          <button className="btn-save" onClick={handleSave}>
-            Crear proyecto
-          </button>
-        </div>
-      </div>
-    </div>
+    <Dialog open={true} onClose={onClose} maxWidth="sm" fullWidth>
+      <DialogTitle>Nuevo Proyecto</DialogTitle>
+
+      <DialogContent>
+        <TextField
+          autoFocus
+          margin="dense"
+          label="Nombre del proyecto"
+          fullWidth
+          value={projectName}
+          onChange={(e) => setProjectName(e.target.value)}
+          placeholder="Mi sitio web"
+        />
+      </DialogContent>
+
+      <DialogActions>
+        <Button onClick={onClose}>
+          Cancelar
+        </Button>
+        <Button onClick={handleSave} variant="contained" color="primary">
+          Crear proyecto
+        </Button>
+      </DialogActions>
+    </Dialog>
   );
 };
 

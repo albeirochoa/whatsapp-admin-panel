@@ -1,4 +1,16 @@
 import { useState } from 'react';
+import {
+  Box,
+  Container,
+  Tabs,
+  Tab,
+  Typography,
+  Button,
+  Alert,
+  Snackbar
+} from '@mui/material';
+import DeleteIcon from '@mui/icons-material/Delete';
+import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
 import Header from './Header';
 import Sidebar from './Sidebar';
 import ConfigSection from './sections/ConfigSection';
@@ -22,6 +34,7 @@ const Dashboard = ({ user, userData, onLogout, onSwitchView, isSuperAdmin }) => 
   const [showAgentModal, setShowAgentModal] = useState(false);
   const [editingAgent, setEditingAgent] = useState(null);
   const [notification, setNotification] = useState(null);
+  const [activeTab, setActiveTab] = useState(0);
 
   const handleCreateProject = async (name) => {
     const result = await createProject(name);
@@ -64,112 +77,157 @@ const Dashboard = ({ user, userData, onLogout, onSwitchView, isSuperAdmin }) => 
   };
 
   return (
-    <>
+    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
       <Header user={user} onLogout={onLogout} />
 
-      <div className="main-content">
+      <Box sx={{ display: 'flex', flexGrow: 1, overflow: 'hidden' }}>
         <Sidebar
           projects={projects}
           selectedProject={selectedProject}
           onSelectProject={setSelectedProject}
           onNewProject={() => setShowProjectModal(true)}
-
           footerSlot={
             isSuperAdmin && (
-              <div style={{ padding: '10px 15px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
-                <button
-                  onClick={onSwitchView}
-                  style={{
-                    width: '100%',
-                    padding: '8px',
-                    background: 'rgba(255, 255, 255, 0.1)',
-                    border: '1px solid rgba(255, 255, 255, 0.2)',
-                    borderRadius: '6px',
-                    color: '#fff',
-                    cursor: 'pointer',
-                    fontSize: '13px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '6px'
-                  }}
-                >
-                  <span>🛡️</span> Panel Admin
-                </button>
-              </div>
+              <Button
+                variant="outlined"
+                fullWidth
+                startIcon={<AdminPanelSettingsIcon />}
+                onClick={onSwitchView}
+                size="small"
+              >
+                Panel Admin
+              </Button>
             )
           }
         />
 
-        <main className="content-area">
+        <Box
+          component="main"
+          sx={{
+            flexGrow: 1,
+            overflow: 'auto',
+            bgcolor: 'background.default',
+          }}
+        >
           {selectedProject ? (
-            <>
+            <Container maxWidth="xl" sx={{ mt: 3, mb: 3 }}>
               <PlanLimitsBanner userData={userData} projects={projects} agents={agents} />
 
-              <div className="content-header">
-                <div>
-                  <h1 className="content-title">{selectedProject.name}</h1>
-                  <p className="content-subtitle">
+              {/* Header del proyecto */}
+              <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
+                <Box>
+                  <Typography variant="h4" gutterBottom>
+                    {selectedProject.name}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
                     Plan: <strong>{userData?.subscription?.plan?.toUpperCase() || 'FREE'}</strong>
-                  </p>
-                </div>
-                <button
-                  className="btn-delete"
-                  style={{ padding: '10px 20px' }}
+                  </Typography>
+                </Box>
+                <Button
+                  variant="outlined"
+                  color="error"
+                  startIcon={<DeleteIcon />}
                   onClick={() => deleteProject(selectedProject.id)}
                 >
                   Eliminar proyecto
-                </button>
-              </div>
+                </Button>
+              </Box>
 
-              <MonitoringSection selectedProject={selectedProject} />
+              {/* Sistema de Tabs */}
+              <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
+                <Tabs
+                  value={activeTab}
+                  onChange={(_, newValue) => setActiveTab(newValue)}
+                  aria-label="Dashboard sections"
+                >
+                  <Tab label="Configuración" />
+                  <Tab label="Agentes" />
+                  <Tab label="Estadísticas" />
+                  <Tab label="Código" />
+                </Tabs>
+              </Box>
 
-              {notification && (
-                <div style={{
-                  padding: '16px',
-                  marginBottom: '20px',
-                  borderRadius: '8px',
-                  background: notification.type === 'success'
-                    ? 'rgba(16, 185, 129, 0.1)'
-                    : 'rgba(239, 68, 68, 0.1)',
-                  border: `2px solid ${notification.type === 'success' ? '#10b981' : '#ef4444'}`,
-                  color: notification.type === 'success' ? '#047857' : '#991b1b',
-                  fontSize: '14px',
-                  fontWeight: '600'
-                }}>
-                  {notification.type === 'success' ? '✅' : '❌'} {notification.message}
-                </div>
-              )}
+              {/* Tab 0: Configuración */}
+              <Box role="tabpanel" hidden={activeTab !== 0}>
+                {activeTab === 0 && (
+                  <>
+                    <ConfigSection
+                      config={config}
+                      setConfig={setConfig}
+                      onSave={handleSaveConfig}
+                      publishing={publishing}
+                    />
+                    <Box mt={4}>
+                      <PreviewSection />
+                    </Box>
+                  </>
+                )}
+              </Box>
 
-              <ConfigSection config={config} setConfig={setConfig} onSave={handleSaveConfig} publishing={publishing} />
-              <AgentsSection
-                agents={agents}
-                onAddAgent={handleAddAgent}
-                onEditAgent={handleEditAgent}
-                onDeleteAgent={deleteAgent}
-              />
-              <CodeSection user={user} selectedProject={selectedProject} />
-              <PreviewSection />
-            </>
+              {/* Tab 1: Agentes */}
+              <Box role="tabpanel" hidden={activeTab !== 1}>
+                {activeTab === 1 && (
+                  <AgentsSection
+                    agents={agents}
+                    onAddAgent={handleAddAgent}
+                    onEditAgent={handleEditAgent}
+                    onDeleteAgent={deleteAgent}
+                  />
+                )}
+              </Box>
+
+              {/* Tab 2: Estadísticas */}
+              <Box role="tabpanel" hidden={activeTab !== 2}>
+                {activeTab === 2 && (
+                  <MonitoringSection selectedProject={selectedProject} />
+                )}
+              </Box>
+
+              {/* Tab 3: Código */}
+              <Box role="tabpanel" hidden={activeTab !== 3}>
+                {activeTab === 3 && (
+                  <CodeSection user={user} selectedProject={selectedProject} />
+                )}
+              </Box>
+            </Container>
           ) : (
-            <div className="empty-state">
-              <div className="empty-icon">📁</div>
-              <h3>Selecciona o crea un proyecto</h3>
-              <p>Cada proyecto representa un sitio web donde instalarás el widget</p>
-              {userData && (
-                <p style={{ fontSize: '13px', color: '#64748b', marginTop: '8px' }}>
-                  Plan {userData.subscription?.plan?.toUpperCase() || 'FREE'}:
-                  {projects.length} / {userData.subscription?.limits?.projects === -1 ? 'ilimitados' : userData.subscription?.limits?.projects} proyectos
-                </p>
-              )}
-              <button className="add-agent-btn" onClick={() => setShowProjectModal(true)}>
-                + Crear proyecto
-              </button>
-            </div>
+            <Box
+              display="flex"
+              justifyContent="center"
+              alignItems="center"
+              minHeight="60vh"
+            >
+              <Box textAlign="center" maxWidth={500}>
+                <Typography variant="h1" fontSize="4rem" mb={2}>
+                  📁
+                </Typography>
+                <Typography variant="h5" gutterBottom>
+                  Selecciona o crea un proyecto
+                </Typography>
+                <Typography variant="body1" color="text.secondary" mb={2}>
+                  Cada proyecto representa un sitio web donde instalarás el widget
+                </Typography>
+                {userData && (
+                  <Typography variant="caption" color="text.secondary" display="block" mb={3}>
+                    Plan {userData.subscription?.plan?.toUpperCase() || 'FREE'}:
+                    {' '}{projects.length} / {userData.subscription?.limits?.projects === -1 ? 'ilimitados' : userData.subscription?.limits?.projects} proyectos
+                  </Typography>
+                )}
+                <Button
+                  variant="contained"
+                  color="primary"
+                  size="large"
+                  onClick={() => setShowProjectModal(true)}
+                >
+                  + Crear proyecto
+                </Button>
+              </Box>
+            </Box>
           )}
-        </main>
-      </div>
+        </Box>
+      </Box>
 
+      {/* Modals */}
       {showProjectModal && (
         <ProjectModal onClose={() => setShowProjectModal(false)} onSave={handleCreateProject} />
       )}
@@ -184,7 +242,25 @@ const Dashboard = ({ user, userData, onLogout, onSwitchView, isSuperAdmin }) => 
           editingAgent={editingAgent}
         />
       )}
-    </>
+
+      {/* Notifications */}
+      <Snackbar
+        open={!!notification}
+        autoHideDuration={5000}
+        onClose={() => setNotification(null)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+      >
+        {notification && (
+          <Alert
+            onClose={() => setNotification(null)}
+            severity={notification.type}
+            sx={{ width: '100%' }}
+          >
+            {notification.message}
+          </Alert>
+        )}
+      </Snackbar>
+    </Box>
   );
 };
 

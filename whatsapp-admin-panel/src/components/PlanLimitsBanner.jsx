@@ -1,4 +1,5 @@
-import React from 'react';
+import { Alert, AlertTitle, Button, Box } from '@mui/material';
+import UpgradeIcon from '@mui/icons-material/Upgrade';
 import { PLANS } from '../constants/plans';
 import { formatLimit } from '../utils/permissions';
 
@@ -17,22 +18,27 @@ const PlanLimitsBanner = ({ userData, projects, agents }) => {
   if (!isNearLimit && !isAtLimit) return null;
 
   return (
-    <div className={`limits-banner ${isAtLimit ? 'limits-critical' : 'limits-warning'}`}>
-      <div className="limits-icon">
-        {isAtLimit ? '⚠️' : '📊'}
-      </div>
-      <div className="limits-content">
-        <div className="limits-title">
-          {isAtLimit ? 'Límite alcanzado' : 'Cerca del límite'}
-        </div>
-        <div className="limits-text">
-          Plan {plan.name}: {projects.length}/{formatLimit(limits.projects)} proyectos, {agents.length}/{formatLimit(limits.agents)} agentes
-        </div>
-      </div>
-      <button className="limits-upgrade-btn">
-        Actualizar Plan
-      </button>
-    </div>
+    <Alert
+      severity={isAtLimit ? 'error' : 'warning'}
+      sx={{ mb: 3 }}
+      action={
+        <Button
+          color="inherit"
+          size="small"
+          startIcon={<UpgradeIcon />}
+          sx={{ whiteSpace: 'nowrap' }}
+        >
+          Actualizar Plan
+        </Button>
+      }
+    >
+      <AlertTitle sx={{ fontWeight: 600 }}>
+        {isAtLimit ? 'Límite alcanzado' : 'Cerca del límite'}
+      </AlertTitle>
+      <Box component="span">
+        Plan <strong>{plan.name}</strong>: {projects.length}/{formatLimit(limits.projects)} proyectos, {agents.length}/{formatLimit(limits.agents)} agentes
+      </Box>
+    </Alert>
   );
 };
 

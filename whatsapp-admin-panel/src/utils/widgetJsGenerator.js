@@ -269,11 +269,17 @@ export const generateWidgetJS = (configUrl, projectId = '') => {
 
     if (window.dataLayer) {
       window.dataLayer.push({
-        event: 'whatsapp_lead_click',
-        lead_platform: 'whatsapp',
+        event: 'whatsapp_click',
+        project_id: '${projectId}',
         agent_name: agentName || 'default',
-        lead_traffic: clickInfo.id ? 'paid_google' : 'organic',
-        lead_ref: clickInfo.hash || 'sin_ref'
+        agent_phone: phone,
+        click_id: clickInfo.id || null,
+        click_hash: clickInfo.hash || null,
+        trigger_type: customMessage ? 'custom_link' : 'link',
+        page_url: window.location.href,
+        page_title: document.title,
+        device_type: isMobile() ? 'mobile' : 'desktop',
+        traffic_type: clickInfo.id ? 'paid_google' : 'organic'
       });
     }
   }
@@ -340,6 +346,7 @@ export const generateWidgetJS = (configUrl, projectId = '') => {
   function openWhatsApp(phone, agentName, customMessage) {
     var clickInfo = getClickId();
     var clickId = clickInfo.id;
+    var clickHash = clickInfo.hash;
 
     var message = buildWhatsAppMessage(customMessage, agentName);
 
@@ -347,15 +354,10 @@ export const generateWidgetJS = (configUrl, projectId = '') => {
       ? 'https://wa.me/' + phone + '?text=' + encodeURIComponent(message)
       : 'https://web.whatsapp.com/send?phone=' + phone + '&text=' + encodeURIComponent(message);
 
-    if (isMobile()) {
-      window.location.href = url;
-    } else {
-      window.open(url, '_blank');
-    }
-
+    // Send webhook BEFORE redirect (especially important for mobile)
     sendWebhook({
       gclid: clickId || null,
-      gclid_hash: hash || null,
+      gclid_hash: clickHash || null,
       phone_e164: phone,
       agent_selected: agentName || 'default',
       first_click_time_iso: new Date().toISOString(),
@@ -363,17 +365,32 @@ export const generateWidgetJS = (configUrl, projectId = '') => {
       page_title: document.title,
       user_agent: navigator.userAgent,
       device_type: isMobile() ? 'mobile' : 'desktop',
-      project_id: '${projectId}'
+      project_id: '${projectId}',
+      trigger: 'button'
     });
 
+    // Push to dataLayer BEFORE redirect for GTM tracking
     if (window.dataLayer) {
       window.dataLayer.push({
-        event: 'whatsapp_lead_click',
-        lead_platform: 'whatsapp',
+        event: 'whatsapp_click',
+        project_id: '${projectId}',
         agent_name: agentName || 'default',
-        lead_traffic: clickId ? 'paid_google' : 'organic',
-        lead_ref: hash || 'sin_ref'
+        agent_phone: phone,
+        click_id: clickId || null,
+        click_hash: clickHash || null,
+        trigger_type: 'button',
+        page_url: window.location.href,
+        page_title: document.title,
+        device_type: isMobile() ? 'mobile' : 'desktop',
+        traffic_type: clickId ? 'paid_google' : 'organic'
       });
+    }
+
+    // Now open WhatsApp
+    if (isMobile()) {
+      window.location.href = url;
+    } else {
+      window.open(url, '_blank');
     }
   }
 

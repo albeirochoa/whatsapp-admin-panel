@@ -43,7 +43,8 @@ const FEATURES_TO_CHECK = [
   { name: 'Enlaces #whatsapp', pattern: 'attachLinkHandlers' },
   { name: 'Construcción de mensajes', pattern: 'buildWhatsAppMessage' },
   { name: 'Tracking con project_id', pattern: 'project_id:' },
-  { name: 'Detección móvil/escritorio', pattern: 'wa.me/' }
+  { name: 'Detección móvil/escritorio', pattern: 'wa.me/' },
+  { name: 'Evento whatsapp_click (GTM)', pattern: 'whatsapp_click' }
 ];
 
 async function checkWidgetVersions() {

@@ -1,4 +1,7 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
+import { ThemeProvider } from '@mui/material/styles';
+import CssBaseline from '@mui/material/CssBaseline';
+import { theme } from './theme';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { UserProvider, useUser } from './contexts/UserContext';
 import PublicRegistration from './components/PublicRegistration';
@@ -105,15 +108,18 @@ function AppContent() {
 
 function App() {
   return (
-    <AuthProvider>
-      {({ user }) => (
-        <UserProvider firebaseUser={user}>
-          <div className="app-container">
-            <AppContent />
-          </div>
-        </UserProvider>
-      )}
-    </AuthProvider>
+    <ThemeProvider theme={theme}>
+      <CssBaseline />
+      <AuthProvider>
+        {({ user }) => (
+          <UserProvider firebaseUser={user}>
+            <div className="app-container">
+              <AppContent />
+            </div>
+          </UserProvider>
+        )}
+      </AuthProvider>
+    </ThemeProvider>
   );
 }
 

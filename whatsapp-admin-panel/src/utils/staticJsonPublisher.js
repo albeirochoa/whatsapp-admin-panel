@@ -1,6 +1,6 @@
 import { ref, uploadString, getDownloadURL, deleteObject } from 'firebase/storage';
-import { storage } from '../firebase';
-import { generateWidgetJS } from './widgetJsGenerator';
+import { storage } from '../firebase.js';
+import { generateWidgetJS } from './widgetJsGenerator.js';
 
 /**
  * Publica la configuración del widget como JSON estático en Firebase Storage

@@ -1,4 +1,4 @@
-import { ROLE_PERMISSIONS, PLANS } from '../constants/plans';
+import { ROLE_PERMISSIONS, PLANS } from '../constants/plans.js';
 
 export const hasPermission = (userRole, permission) => {
   if (!userRole) return false;
